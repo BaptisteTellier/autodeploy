@@ -4,6 +4,8 @@ What you need before you run this script :
 
 If you want to tune VBR : 
 "license" folder with .lic inside it
+to edit tunning : $CustomVBRBlock
+All PS command run here
 
 If you want to deploy node_exporter : 
 "node_exporter" folder with extracted binary 'NOTICE' 'node_exporter' 'LICENSE'
