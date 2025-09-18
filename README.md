@@ -3,15 +3,11 @@ Automates customization of Veeam Appliance ISO: grub, kickstart, license, node_e
 
 What you need before you run this script : 
 
-If you want to tune VBR : 
-
 "license" folder with .lic inside it
 
-to edit tunning : $CustomVBRBlock
+to edit tunning : $CustomVBRBlock (All PS command run here)
 
-All PS command run here
-
-If you want to deploy node_exporter :
+to deploy node_exporter :
 
 "node_exporter" folder with extracted binary 'NOTICE' 'node_exporter' 'LICENSE'
 
