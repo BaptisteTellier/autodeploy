@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
 Automates customization of Veeam Appliance ISO: grub, kickstart, license, node_exporter with error handling, logging, and parameterization.
 
@@ -217,7 +217,10 @@ try {
         "#config and setup Node_exporter",
         "sudo systemctl daemon-reload",
         "sudo systemctl start node_exporter",
-        "sudo systemctl enable node_exporter.service",
+        "sudo systemctl enable node_exporter.service"
+    )
+    $Node_ExporterFWBlock = @(
+        "#Add Node_Exporter to FW",
         "sudo firewall-cmd --permanent --zone=public --add-port=9100/tcp",
         "sudo firewall-cmd --reload"
     )
@@ -285,6 +288,7 @@ try {
         Write-Log "Node exporter block insert enabled" 'Info'
         Insert-AfterLine -FilePath "vbr-ks.cfg" -TargetLine 'dnf install -y --nogpgcheck --disablerepo="*" /tmp/static-packages/*.rpm' -LinesToInsert $NodeExporterSetupBlock
         Insert-AfterLine -FilePath "vbr-ks.cfg" -TargetLine "/usr/bin/cp -rv /tmp/*.* /mnt/sysimage/var/log/appliance-installation-logs/" -LinesToInsert $CopyNodeExporterBlock
+        Insert-AfterLine -FilePath "vbr-ks.cfg" -TargetLine "/opt/veeam/hostmanager/veeamhostmanager --apply_init_config /etc/veeam/vbr_init.cfg" -LinesToInsert $Node_ExporterFWBlock
         Safe-ExternalCommand "wsl xorriso -boot_image any keep -dev `"$LocalISO`" -map node_exporter /node_exporter *> `$null"
         Write-Log "Node exporter folder copied to ISO" 'Info'
     }
