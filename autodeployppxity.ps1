@@ -221,7 +221,7 @@ try {
     )
     $Node_ExporterFWBlock = @(
         "#Add Node_Exporter to FW",
-        "sudo firewall-cmd --permanent --zone=public --add-port=9100/tcp",
+        "sudo firewall-cmd --permanent --zone=drop --add-port=9100/tcp",
         "sudo firewall-cmd --reload"
     )
     $HostConfigBlock = @(
@@ -323,3 +323,4 @@ try {
 }
 
 #endregion
+
