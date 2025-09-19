@@ -17,11 +17,11 @@ upload file (grub.cfg and kickstart.cfg) to ISO
 
 What you need before you run this script : 
 
-#"license" folder with .lic inside it
+#"license" folder with .lic inside it (or set $LicenseVBRTune to false)
 
 to edit tunning : $CustomVBRBlock (All PS command run here)
 
-##to deploy node_exporter :
+##to deploy node_exporter : (or set $NodeExporter to false)
 
 "node_exporter" folder with extracted binary 'NOTICE' 'node_exporter' 'LICENSE'
 
