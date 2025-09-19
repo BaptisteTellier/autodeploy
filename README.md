@@ -55,7 +55,6 @@ Before running the script, you need:
 
 1. Parameters to change Hostname
 2. Function to change IP / DHCP
-4. Powershell to add service provider in 13.0.1
 5. move away from wsl and use oscdimg.exe
 
 ---
