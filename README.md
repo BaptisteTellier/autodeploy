@@ -50,6 +50,13 @@ Before running the script, you need:
 
 ---
 
+## TO DO
+
+1. Powershell to add service provider in 13.0.1
+2. move away from wsl and use oscdimg.exe
+
+---
+
 ## Contributing
 
 Contributions are welcome! Feel free to open issues or submit pull requests.
