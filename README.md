@@ -10,9 +10,10 @@ Automates customization of the Veeam Appliance ISO: GRUB, Kickstart, license, No
 - Edits GRUB to enable clean install (erase all) and kickstart execution
 - Modifies Kickstart to:
   - Provide installation answers
-  - Add Node Exporter
-  - Add Veeam Backup & Replication (VBR) license
-  - Run PowerShell cmdlets to add a syslog server
+  - (Optional) Add Node Exporter → not supported by Veeam Customer Support https://www.veeam.com/kb4772
+  - (Optional) Add Veeam Backup & Replication (VBR) license
+  - (Optional) Run PowerShell cmdlets to add a syslog server
+  - (Optional) Run PowerShell Cmdlets to add a Service Provider (v13.0.1)
 - Uploads the modified files back into the ISO
 
 ---
