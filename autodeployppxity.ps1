@@ -35,8 +35,8 @@ param (
     [string]$VeeamSoIsEnabled = "true",
     [string]$NtpServer = "time.nist.gov",
     [string]$NtpRunSync = "false",
-    [bool]$NodeExporter = $true,
-    [bool]$LicenseVBRTune = $true,
+    [bool]$NodeExporter = $false,
+    [bool]$LicenseVBRTune = $false,
     [string]$LicenseFile = "Veeam-100instances-entplus-monitoring-nfr.lic",
     [string]$SyslogServer = "172.17.53.28"
 )
@@ -323,4 +323,5 @@ try {
 }
 
 #endregion
+
 
