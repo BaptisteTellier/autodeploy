@@ -35,10 +35,14 @@ param (
     [string]$VeeamSoIsEnabled = "true",
     [string]$NtpServer = "time.nist.gov",
     [string]$NtpRunSync = "false",
-    [bool]$NodeExporter = $false,
-    [bool]$LicenseVBRTune = $false,
+    [bool]$NodeExporter = $false, #not supported by Veeam Customer Support https://www.veeam.com/kb4772
+    [bool]$LicenseVBRTune = $flase, #see $CustomVBRBlock for PowerShell Cmdlet
     [string]$LicenseFile = "Veeam-100instances-entplus-monitoring-nfr.lic",
-    [string]$SyslogServer = "172.17.53.28"
+    [string]$SyslogServer = "172.17.53.28",
+    [bool]$VCSPConnection = $false,
+    [string]$VCSPUrl = "192.168.1.202",
+    [string]$VCSPLogin = "v13",
+    [string]$VCSPPassword = "Azerty123!"
 )
 #endregion
 
@@ -170,6 +174,14 @@ try {
         "Install-VBRLicense -Path /etc/veeam/license/$LicenseFile",
         "Add-VBRSyslogServer -ServerHost '$SyslogServer' -Port 514 -Protocol Udp",
         "'"
+    $CustomVCSPBlock = @(
+        "# Connect to Service Provider with Mgmt Agent",
+        "pwsh -Command '",
+        "Import-Module /opt/veeam/powershell/Veeam.Backup.PowerShell/Veeam.Backup.PowerShell.psd1",
+        "Add-VBRCloudProviderCredentials -Name '$VCSPLogin' -Password '$VCSPPassword'",
+        "$credentials = Get-VBRCloudProviderCredentials -Name '$VCSPLogin'",
+        "Add-VBRCloudProvider -Address '$VCSPConnection' -Credentials $credentials -InstallManagementAgent",
+        "'"
     )
     $CopyLicBlock = @(
         "# Copy Veeam license file from ISO to OS /etc/veeam/license/",
@@ -284,6 +296,11 @@ try {
         Write-Log "License folder copied to ISO" 'Info'
     }
 
+        if ($VCSPConnection) {
+        Write-Log "Adding service provider to config file" 'Info'
+        Insert-AfterLine -FilePath "vbr-ks.cfg" -TargetLine "/opt/veeam/hostmanager/veeamhostmanager --apply_init_config /etc/veeam/vbr_init.cfg" -LinesToInsert $CustomVCSPBlock
+    }
+
     if ($NodeExporter) {
         Write-Log "Node exporter block insert enabled" 'Info'
         Insert-AfterLine -FilePath "vbr-ks.cfg" -TargetLine 'dnf install -y --nogpgcheck --disablerepo="*" /tmp/static-packages/*.rpm' -LinesToInsert $NodeExporterSetupBlock
@@ -323,5 +340,3 @@ try {
 }
 
 #endregion
-
-
