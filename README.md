@@ -17,11 +17,16 @@ upload file (grub.cfg and kickstart.cfg) to ISO
 
 What you need before you run this script : 
 
-#"license" folder with .lic inside it (or set $LicenseVBRTune to false)
+# wsl running on your computer & xorriso installed
+
+if $LicenseVBRTune = true
+#"license" folder with .lic inside it 
 
 to edit tunning : $CustomVBRBlock (All PS command run here)
 
-##to deploy node_exporter : (or set $NodeExporter to false)
+
+if $NodeExporter = true
+##to deploy node_exporter : 
 
 "node_exporter" folder with extracted binary 'NOTICE' 'node_exporter' 'LICENSE'
 
@@ -31,4 +36,4 @@ https://github.com/prometheus/node_exporter/releases
 
 VeeamSoftwareAppliance_13.0.0.4967_20250822.iso
 
-complete parameters
+++assign all variable in parameters
