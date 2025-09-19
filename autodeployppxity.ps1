@@ -174,6 +174,7 @@ try {
         "Install-VBRLicense -Path /etc/veeam/license/$LicenseFile",
         "Add-VBRSyslogServer -ServerHost '$SyslogServer' -Port 514 -Protocol Udp",
         "'"
+    )
     $CustomVCSPBlock = @(
         "# Connect to Service Provider with Mgmt Agent",
         "pwsh -Command '",
