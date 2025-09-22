@@ -38,7 +38,7 @@ Default: "veeam-server"
 
 .PARAMETER UseDHCP
 Switch parameter to configure network interface for DHCP. When set, static IP parameters are ignored.
-Default: $false (uses static IP configuration)
+Default: $true 
 
 .PARAMETER StaticIP
 IP address for static network configuration. Required when UseDHCP is $false.
@@ -58,11 +58,13 @@ Default: @("8.8.8.8", "8.8.4.4")
 
 .PARAMETER NodeExporter
 Boolean flag to enable Prometheus node_exporter deployment for monitoring integration.
-Requires node_exporter folder with binaries. Default: $false
+Requires node_exporter folder with binaries. 
+Default: $false
 
 .PARAMETER LicenseVBRTune
 Boolean flag to enable automatic Veeam license installation and configuration.
-Requires license folder with .lic files. Default: $false
+Requires license folder with .lic files. 
+Default: $false
 
 .PARAMETER VCSPConnection
 Boolean flag to enable Veeam Cloud Service Provider connection and management agent installation.
@@ -145,7 +147,8 @@ Simple DHCP configuration for lab environment
     -LicenseVBRTune $false `
     -VCSPConnection $false
 
-# Example 3: Enterprise deployment with German localization
+.EXAMPLE
+Enterprise deployment with German localization
 .\autodeployppxity.ps1 `
     -LocalISO "C:\ISOs\VeeamSoftwareAppliance_13.0.0.4967_20250822.iso" `
     -GrubTimeout 30 `
@@ -167,7 +170,7 @@ Simple DHCP configuration for lab environment
     -VeeamSoIsEnabled "true" `
     -NtpServer "de.pool.ntp.org" `
     -NtpRunSync "true" `
-    -NodeExporter $true `
+    -NodeExporter $false `
     -LicenseVBRTune $true `
     -LicenseFile "Veeam-Enterprise-Germany.lic" `
     -SyslogServer "192.168.10.50" `
@@ -180,7 +183,7 @@ None. This script does not accept pipeline input.
 Customized IN PLACE ISO file with modified GRUB and Kickstart configurations. Generates detailed logs of all operations.
 
 .NOTES
-File Name      : autodeployppxityv2.ps1
+File Name      : autodeployppxity.ps1
 Author         : Baptiste TELLIER
 Prerequisite   : PowerShell 5.1+, WSL with xorriso installed
 Version        : 2.0
@@ -219,7 +222,7 @@ param (
     
     ##### Network configuration #####
     [string]$Hostname = "veeam-server",
-    [switch]$UseDHCP = $false, #set to $true for DHCP
+    [switch]$UseDHCP = $true, #set to $true for DHCP
     [string]$StaticIP = "192.168.1.166", #optional, only if $UseDHCP = $false
     [string]$Subnet = "255.255.255.0", #optional, only if $UseDHCP = $false
     [string]$Gateway = "192.168.1.1", #optional, only if $UseDHCP = $false
@@ -238,10 +241,10 @@ param (
     [string]$NtpRunSync = "false",
     
     ##### optional Node Exporter : Not supported by veeam support #####
-    [bool]$NodeExporter = $true, #optional
+    [bool]$NodeExporter = $false, #optional
     
     ##### optional Veeam configuration #####
-    [bool]$LicenseVBRTune = $true, #optional
+    [bool]$LicenseVBRTune = $false, #optional
     [string]$LicenseFile = "Veeam-100instances-entplus-monitoring-nfr.lic",
     [string]$SyslogServer = "172.17.53.28",
     
@@ -813,4 +816,5 @@ try {
 }
 
 #endregion
+
 
