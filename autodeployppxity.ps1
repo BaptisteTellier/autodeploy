@@ -70,7 +70,7 @@ Default: $false
 
 .EXAMPLE
 Complete static IP configuration with all optional features disable
-.\autodeployppxityv2.ps1 `
+.\autodeployppxity.ps1 `
     -LocalISO "VeeamSoftwareAppliance_13.0.0.4967_20250822.iso" `
     -GrubTimeout 45 `
     -KeyboardLayout "us" `
@@ -97,7 +97,7 @@ Complete static IP configuration with all optional features disable
 
 .EXAMPLE
 Complete static IP configuration with all optional features enable
-.\autodeployppxityv2.ps1 `
+.\autodeployppxity.ps1 `
     -LocalISO "VeeamSoftwareAppliance_13.0.0.4967_20250822.iso" `
     -GrubTimeout 45 `
     -KeyboardLayout "us" `
@@ -129,7 +129,7 @@ Complete static IP configuration with all optional features enable
 
 .EXAMPLE
 Simple DHCP configuration for lab environment
-.\autodeployppxityv2.ps1 `
+.\autodeployppxity.ps1 `
     -LocalISO "VeeamAppliance-Lab.iso" `
     -GrubTimeout 10 `
     -KeyboardLayout "fr" `
@@ -146,7 +146,7 @@ Simple DHCP configuration for lab environment
     -VCSPConnection $false
 
 # Example 3: Enterprise deployment with German localization
-.\autodeployppxityv2.ps1 `
+.\autodeployppxity.ps1 `
     -LocalISO "C:\ISOs\VeeamSoftwareAppliance_13.0.0.4967_20250822.iso" `
     -GrubTimeout 30 `
     -KeyboardLayout "de" `
@@ -813,3 +813,4 @@ try {
 }
 
 #endregion
+
