@@ -194,7 +194,7 @@ Verify WSL is accessible
 |-----------|------|-------------|---------|
 | `VeeamAdminPassword` | String | Admin account password | `123q123Q123!123` |
 | `VeeamAdminMfaSecretKey` | String | Admin MFA secret (Base32) | `JBSWY3DPEHPK3PXP` |
-| `VeeamAdminIsMfaEnabled` | String | Enable admin MFA | `false` |
+| `VeeamAdminIsMfaEnabled` | String | Enable admin MFA | `true` |
 | `VeeamSoPassword` | String | Service account password | `123w123W123!123` |
 | `VeeamSoMfaSecretKey` | String | Service MFA secret (Base32) | `JBSWY3DPEHPK3PXP` |
 | `VeeamSoIsMfaEnabled` | String | Enable service MFA | `true` |
@@ -204,8 +204,8 @@ Verify WSL is accessible
 ### Optional Features
 | Parameter | Type | Description | Default |
 |-----------|------|-------------|---------|
-| `NodeExporter` | Boolean | Deploy Prometheus monitoring | `$true` |
-| `LicenseVBRTune` | Boolean | Auto-install license | `$true` |
+| `NodeExporter` | Boolean | Deploy Prometheus monitoring | `$false` |
+| `LicenseVBRTune` | Boolean | Auto-install license | `$false` |
 | `LicenseFile` | String | License filename | `Veeam-100instances-entplus-monitoring-nfr.lic` |
 | `SyslogServer` | String | Syslog server IP | `172.17.53.28` |
 | `VCSPConnection` | Boolean | Connect to VCSP | `$false` |
