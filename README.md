@@ -200,7 +200,7 @@ Simple DHCP configuration for lab environment
 | `VeeamSoPassword` | String | Service account password | `123w123W123!123` |
 | `VeeamSoMfaSecretKey` | String | Service MFA secret (Base32) | `JBSWY3DPEHPK3PXP` |
 | `VeeamSoIsMfaEnabled` | String | Enable service MFA | `true` |
-| `VeeamSoRecoveryToken` | String | Recovery token (GUID) | Generated |
+| `VeeamSoRecoveryToken` | String | Recovery token (GUID) | `aaaabbbb-cccc-dddd-eeee-ffffgggghhh` |
 | `VeeamSoIsEnabled` | String | Enable service account | `true` |
 
 ### Optional Features
