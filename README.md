@@ -90,8 +90,7 @@ Verify WSL is accessible
 
 ## Quick Start
 
-.EXAMPLE
-Complete static IP configuration with all optional features enable
+# Example 2 : Complete static IP configuration with all optional features enable
 
 .\autodeployppxity.ps1 `
     -LocalISO "VeeamSoftwareAppliance_13.0.0.4967_20250822.iso" 
@@ -123,8 +122,7 @@ Complete static IP configuration with all optional features enable
     -VCSPLogin "serviceaccount" 
     -VCSPPassword "VCSPServiceP@ss!" `
 
-.EXAMPLE
-Simple DHCP configuration for lab environment
+# Example 2 : Simple DHCP configuration for lab environment with all optional features disable
 
 .\autodeployppxity.ps1 `
     -LocalISO "VeeamAppliance-Lab.iso" 
@@ -165,7 +163,7 @@ Simple DHCP configuration for lab environment
     -VeeamSoIsEnabled "true" 
     -NtpServer "de.pool.ntp.org" 
     -NtpRunSync "true" 
-    -NodeExporter $true 
+    -NodeExporter $false 
     -LicenseVBRTune $true 
     -LicenseFile "Veeam-Enterprise-Germany.lic" 
     -SyslogServer "192.168.10.50" 
