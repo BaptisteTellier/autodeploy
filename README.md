@@ -90,7 +90,7 @@ Verify WSL is accessible
 
 ## Quick Start
 
-# Example 2 : Complete static IP configuration with all optional features enable
+# Example 1 : Complete static IP configuration with all optional features enable
 
 .\autodeployppxity.ps1 `
     -LocalISO "VeeamSoftwareAppliance_13.0.0.4967_20250822.iso" 
@@ -103,10 +103,10 @@ Verify WSL is accessible
     -Subnet "255.255.255.0" 
     -Gateway "10.50.100.1" 
     -DNSServers @("10.50.1.10", "10.50.1.11", "8.8.8.8") 
-    -VeeamAdminPassword "P@ssw0rd2024!" 
+    -VeeamAdminPassword "P@ssw0rd2024!123" 
     -VeeamAdminMfaSecretKey "ABCDEFGH12345678IJKLMNOP" 
     -VeeamAdminIsMfaEnabled "true" 
-    -VeeamSoPassword "S3cur3P@ss!" 
+    -VeeamSoPassword "S3cur3P@ss!123" 
     -VeeamSoMfaSecretKey "ZYXWVUTS87654321QPONMLKJ" 
     -VeeamSoIsMfaEnabled "true" 
     -VeeamSoRecoveryToken "12345678-90ab-cdef-1234-567890abcdef" 
@@ -131,9 +131,9 @@ Verify WSL is accessible
     -Timezone "Europe/Paris" 
     -Hostname "veeam-lab-test" 
     -UseDHCP:$true 
-    -VeeamAdminPassword "LabP@ss123" 
+    -VeeamAdminPassword "LabP@ss123!123" 
     -VeeamAdminIsMfaEnabled "false" 
-    -VeeamSoPassword "SOLabP@ss123" 
+    -VeeamSoPassword "SOLabP@ss123!123" 
     -VeeamSoIsMfaEnabled "false" 
     -VeeamSoIsEnabled "false" 
     -NodeExporter $false 
@@ -153,10 +153,10 @@ Verify WSL is accessible
     -Subnet "255.255.255.0" 
     -Gateway "192.168.10.1" 
     -DNSServers @("192.168.10.10", "192.168.10.11") 
-    -VeeamAdminPassword "EnterprisePw2024!" 
+    -VeeamAdminPassword "EnterprisePw2024!123" 
     -VeeamAdminMfaSecretKey "ENTERPRISE1234567890ABCD" 
     -VeeamAdminIsMfaEnabled "true" 
-    -VeeamSoPassword "SOEnterprisePw!" 
+    -VeeamSoPassword "SOEnterprisePw!123" 
     -VeeamSoMfaSecretKey "SOENTRPRS9876543210ZYXW" 
     -VeeamSoIsMfaEnabled "true" 
     -VeeamSoRecoveryToken "aaaabbbb-cccc-dddd-eeee-ffffgggghhh" 
@@ -183,7 +183,7 @@ Verify WSL is accessible
 ### Network Configuration
 | Parameter | Type | Description | Default | Notes |
 |-----------|------|-------------|---------|-------|
-| `UseDHCP` | Switch | Enable DHCP configuration | `$false` | When true, static params ignored |
+| `UseDHCP` | Switch | Enable DHCP configuration | `$true` | When true, static params ignored |
 | `StaticIP` | String | Static IP address | `192.168.1.166` | Required when DHCP disabled |
 | `Subnet` | String | Subnet mask | `255.255.255.0` | Required when DHCP disabled |
 | `Gateway` | String | Gateway IP address | `192.168.1.1` | Required when DHCP disabled |
