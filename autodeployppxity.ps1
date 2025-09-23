@@ -241,7 +241,7 @@ param (
     [string]$NtpRunSync = "false",
     
     ##### optional Node Exporter : Not supported by veeam support #####
-    [bool]$NodeExporter = $false, #optional
+    [bool]$NodeExporter = $false, #optional - FW rules doesn't work with kickstart
     
     ##### optional Veeam configuration #####
     [bool]$LicenseVBRTune = $false, #optional
@@ -305,7 +305,7 @@ function Replace-InFile {
         $content = Get-Content $FilePath
         $content = $content -replace $Pattern, $Replacement
         Set-Content $FilePath $content
-        Write-Log "Replaced pattern in $FilePath" 'Info'
+        Write-Log "Replaced pattern with $Replacement in $FilePath" 'Info'
     } catch {
         Write-Log "Replace in file failed: $($_.Exception.Message)" 'Error'
         throw
@@ -587,6 +587,133 @@ function Set-NetworkConfiguration {
 
 #endregion
 
+#region Blocks for string to add to kickstart
+    $CustomVBRBlock = @(
+        "# Custom VBR config",
+        "pwsh -Command '",
+        "Import-Module /opt/veeam/powershell/Veeam.Backup.PowerShell/Veeam.Backup.PowerShell.psd1",
+        "Install-VBRLicense -Path /etc/veeam/license/$LicenseFile",
+        "Add-VBRSyslogServer -ServerHost '$SyslogServer' -Port 514 -Protocol Udp",
+        "'"
+    )
+    $CustomVCSPBlock = @(
+        "# Connect to Service Provider with Mgmt Agent",
+        "pwsh -Command '",
+        "Import-Module /opt/veeam/powershell/Veeam.Backup.PowerShell/Veeam.Backup.PowerShell.psd1",
+        "Add-VBRCloudProviderCredentials -Name '$VCSPLogin' -Password '$VCSPPassword'",
+        "`$credentials = Get-VBRCloudProviderCredentials -Name '$VCSPLogin'",
+        "Add-VBRCloudProvider -Address '$VCSPConnection' -Credentials `$credentials -InstallManagementAgent",
+        "'"
+    )
+    $CopyLicBlock = @(
+        "# Copy Veeam license file from ISO to OS /etc/veeam/license/",
+        "log : 'starting license file copy'",
+        "mkdir -p /mnt/sysimage/etc/veeam/license/",
+        "if [ -f /mnt/install/repo/license/$LicenseFile ]; then",
+        "  cp -f /mnt/install/repo/license/$LicenseFile /mnt/sysimage/etc/veeam/license/$LicenseFile",
+        "  chmod 600 /mnt/sysimage/etc/veeam/license/$LicenseFile",
+        "  chown root:root /mnt/sysimage/etc/veeam/license/$LicenseFile",
+        "fi"
+        "log : 'license file copy completed'"
+    )
+    $CopyNodeExporterBlock = @(
+        "# Create directory for node_exporter and move to OS /etc/node_exporter",
+        "log : 'starting node_exporter files copy'",
+        "mkdir -p /mnt/sysimage/etc/node_exporter",
+        "if [ -d /mnt/install/repo/node_exporter ]; then",
+        "    cp -r /mnt/install/repo/node_exporter /mnt/sysimage/etc/",
+        "fi"
+        "log : 'node_exporter files copy completed'"
+    )
+    $NodeExporterSetupBlock = @(
+        "#node_exporter",
+        "log : 'starting node_exporter installation and configuration'",
+        "groupadd -f node_exporter",
+        "useradd -g node_exporter --no-create-home --shell /bin/false node_exporter",
+        "chown node_exporter:node_exporter /etc/node_exporter",
+        "log : 'node_exporter user and group created'",
+        "cat << EOF >> /etc/systemd/system/node_exporter.service",
+        "[Unit]",
+        "Description=Node Exporter",
+        "Documentation=https://prometheus.io/docs/guides/node-exporter/",
+        "Wants=network-online.target",
+        "After=network-online.target",
+        "",
+        "[Service]",
+        "User=node_exporter",
+        "Group=node_exporter",
+        "Type=simple",
+        "Restart=on-failure",
+        "ExecStart=/etc/node_exporter/node_exporter --web.listen-address=:9100",
+        "",
+        "[Install]",
+        "WantedBy=multi-user.target",
+        "EOF",
+        "",
+        "chmod 664 /etc/systemd/system/node_exporter.service",
+        "",
+        "#config and setup Node_exporter",
+        "systemctl daemon-reload",
+        "systemctl start node_exporter",
+        "systemctl enable node_exporter.service",
+        "log : 'node_exporter installation and configuration completed'"
+    )
+    $Node_ExporterFWBlock = @(
+        "# Add Node_Exporter to FW",
+        "firewall-cmd --permanent --zone=drop --add-port=9100/tcp",
+        "firewall-cmd --reload"
+    )
+    $HostConfigBlock = @(
+        "log 'starting Veeam Host Manager configuration'",
+        "###############################################################################",
+        "# Automatic Host Manager configuration file",
+        "###############################################################################",
+        "cat << EOF >> /etc/veeam/vbr_init.cfg",
+        "veeamadmin.password=$VeeamAdminPassword",
+        "veeamadmin.mfaSecretKey=$VeeamAdminMfaSecretKey",
+        "veeamadmin.isMfaEnabled=$VeeamAdminIsMfaEnabled",
+        "veeamso.password=$VeeamSoPassword",
+        "veeamso.mfaSecretKey=$VeeamSoMfaSecretKey",
+        "veeamso.isMfaEnabled=$VeeamSoIsMfaEnabled",
+        "veeamso.recoveryToken=$VeeamSoRecoveryToken",
+        "veeamso.isEnabled=$VeeamSoIsEnabled",
+        "ntp.servers=$NtpServer",
+        "ntp.runSync=$NtpRunSync",
+        "vbr_control.runInitIso=true",
+        "vbr_control.runStart=true",
+        "EOF",
+        "log 'Veeam Host Manager configuration file created at /etc/veeam/vbr_init.cfg'",
+        "###############################################################################",
+        "# Automatic Host Manager configuration TRIGGER AFTER REBOOT",
+        "###############################################################################",
+        "set -e",
+        "cat << EOF >> /etc/veeam/veeam-init.sh",
+        "#!/bin/bash",
+        "set -eE -u -o pipefail",
+        "/opt/veeam/hostmanager/veeamhostmanager --apply_init_config /etc/veeam/vbr_init.cfg",
+        "systemctl disable veeam-init",
+        "EOF",
+        "log 'Veeam Host Manager init script created at /etc/veeam/veeam-init.sh'",
+        "chmod +x /etc/veeam/veeam-init.sh",
+        "cat << EOF >> /etc/systemd/system/veeam-init.service",
+        "[Unit]",
+        "Description=One-shot daemon to run /opt/veeam/hostmanager/veeamhostmanager at next boot",
+        "[Service]",
+        "Type=oneshot",
+        "ExecStart=/etc/veeam/veeam-init.sh",
+        "RemainAfterExit=no",
+        "[Install]",
+        "WantedBy=multi-user.target",
+        "EOF",
+        "log 'Veeam Host Manager init service created at /etc/systemd/system/veeam-init.service'",
+        "# Enable the service for next boot",
+        "systemctl enable veeam-init.service",
+        "log 'Veeam Host Manager init service enabled to run at next boot'",
+        "log 'Veeam Host Manager configuration completed'",
+        "###############################################################################"
+    )
+#endregion
+
 #region Main Script
 
 try {
@@ -645,122 +772,6 @@ try {
     Write-Log "Kickstart disable init wizard added" 'Info'
     #endregion
 
-    #region Blocks for string to add to kickstart
-    $CustomVBRBlock = @(
-        "# Custom VBR config",
-        "pwsh -Command '",
-        "Import-Module /opt/veeam/powershell/Veeam.Backup.PowerShell/Veeam.Backup.PowerShell.psd1",
-        "Install-VBRLicense -Path /etc/veeam/license/$LicenseFile",
-        "Add-VBRSyslogServer -ServerHost '$SyslogServer' -Port 514 -Protocol Udp",
-        "'"
-    )
-    $CustomVCSPBlock = @(
-        "# Connect to Service Provider with Mgmt Agent",
-        "pwsh -Command '",
-        "Import-Module /opt/veeam/powershell/Veeam.Backup.PowerShell/Veeam.Backup.PowerShell.psd1",
-        "Add-VBRCloudProviderCredentials -Name '$VCSPLogin' -Password '$VCSPPassword'",
-        "`$credentials = Get-VBRCloudProviderCredentials -Name '$VCSPLogin'",
-        "Add-VBRCloudProvider -Address '$VCSPConnection' -Credentials `$credentials -InstallManagementAgent",
-        "'"
-    )
-    $CopyLicBlock = @(
-        "# Copy Veeam license file from ISO to OS /etc/veeam/license/",
-        "mkdir -p /mnt/sysimage/etc/veeam/license/",
-        "if [ -f /mnt/install/repo/license/$LicenseFile ]; then",
-        "  cp -f /mnt/install/repo/license/$LicenseFile /mnt/sysimage/etc/veeam/license/$LicenseFile",
-        "  chmod 600 /mnt/sysimage/etc/veeam/license/$LicenseFile",
-        "  chown root:root /mnt/sysimage/etc/veeam/license/$LicenseFile",
-        "fi"
-    )
-    $CopyNodeExporterBlock = @(
-        "# Create directory for node_exporter and move to OS /etc/node_exporter",
-        "mkdir -p /mnt/sysimage/etc/node_exporter",
-        "if [ -d /mnt/install/repo/node_exporter ]; then",
-        "    cp -r /mnt/install/repo/node_exporter /mnt/sysimage/etc/",
-        "fi"
-    )
-    $NodeExporterSetupBlock = @(
-        "#node_exporter",
-        "",
-        "sudo groupadd -f node_exporter",
-        "sudo useradd -g node_exporter --no-create-home --shell /bin/false node_exporter",
-        "sudo chown node_exporter:node_exporter /etc/node_exporter",
-        "",
-        "cat << EOF >> /etc/systemd/system/node_exporter.service",
-        "[Unit]",
-        "Description=Node Exporter",
-        "Documentation=https://prometheus.io/docs/guides/node-exporter/",
-        "Wants=network-online.target",
-        "After=network-online.target",
-        "",
-        "[Service]",
-        "User=node_exporter",
-        "Group=node_exporter",
-        "Type=simple",
-        "Restart=on-failure",
-        "ExecStart=/etc/node_exporter/node_exporter --web.listen-address=:9100",
-        "",
-        "[Install]",
-        "WantedBy=multi-user.target",
-        "EOF",
-        "",
-        "sudo chmod 664 /etc/systemd/system/node_exporter.service",
-        "",
-        "#config and setup Node_exporter",
-        "sudo systemctl daemon-reload",
-        "sudo systemctl start node_exporter",
-        "sudo systemctl enable node_exporter.service"
-    )
-    $Node_ExporterFWBlock = @(
-        "#Add Node_Exporter to FW",
-        "sudo firewall-cmd --permanent --zone=drop --add-port=9100/tcp",
-        "sudo firewall-cmd --reload"
-    )
-    $HostConfigBlock = @(
-        "###############################################################################",
-        "# Automatic Host Manager configuration file",
-        "###############################################################################",
-        "cat << EOF >> /etc/veeam/vbr_init.cfg",
-        "veeamadmin.password=$VeeamAdminPassword",
-        "veeamadmin.mfaSecretKey=$VeeamAdminMfaSecretKey",
-        "veeamadmin.isMfaEnabled=$VeeamAdminIsMfaEnabled",
-        "veeamso.password=$VeeamSoPassword",
-        "veeamso.mfaSecretKey=$VeeamSoMfaSecretKey",
-        "veeamso.isMfaEnabled=$VeeamSoIsMfaEnabled",
-        "veeamso.recoveryToken=$VeeamSoRecoveryToken",
-        "veeamso.isEnabled=$VeeamSoIsEnabled",
-        "ntp.servers=$NtpServer",
-        "ntp.runSync=$NtpRunSync",
-        "vbr_control.runInitIso=true",
-        "vbr_control.runStart=true",
-        "EOF",
-        "###############################################################################",
-        "# Automatic Host Manager configuration TRIGGER AFTER REBOOT",
-        "###############################################################################",
-        "set -e",
-        "cat << EOF >> /etc/veeam/veeam-init.sh",
-        "#!/bin/bash",
-        "set -eE -u -o pipefail",
-        "/opt/veeam/hostmanager/veeamhostmanager --apply_init_config /etc/veeam/vbr_init.cfg",
-        "systemctl disable veeam-init",
-        "EOF",
-        "chmod +x /etc/veeam/veeam-init.sh",
-        "cat << EOF >> /etc/systemd/system/veeam-init.service",
-        "[Unit]",
-        "Description=One-shot daemon to run /opt/veeam/hostmanager/veeamhostmanager at next boot",
-        "[Service]",
-        "Type=oneshot",
-        "ExecStart=/etc/veeam/veeam-init.sh",
-        "RemainAfterExit=no",
-        "[Install]",
-        "WantedBy=multi-user.target",
-        "EOF",
-        "# Enable the service for next boot",
-        "systemctl enable veeam-init.service",
-        "###############################################################################"
-    )
-    #endregion
-
     #region Insert Blocks into vbr-ks.cfg
     
     # Insert Host Configuration block
@@ -770,6 +781,8 @@ try {
         Write-Log "License VBR tuning block insert enabled" 'Info'
         Insert-AfterLine -FilePath "vbr-ks.cfg" -TargetLine "/opt/veeam/hostmanager/veeamhostmanager --apply_init_config /etc/veeam/vbr_init.cfg" -LinesToInsert $CustomVBRBlock
         Insert-AfterLine -FilePath "vbr-ks.cfg" -TargetLine "/usr/bin/cp -rv /tmp/*.* /mnt/sysimage/var/log/appliance-installation-logs/" -LinesToInsert $CopyLicBlock
+        Write-Log "License block inserted into kickstart" 'Info'
+        Write-Log "Starting license file copy" 'Info'
         Safe-ExternalCommand "wsl xorriso -boot_image any keep -dev `"$LocalISO`" -map license /license *> `$null"
         Write-Log "License folder copied to ISO" 'Info'
     }
@@ -777,6 +790,7 @@ try {
     if ($VCSPConnection) {
         Write-Log "Adding service provider to config file" 'Info'
         Insert-AfterLine -FilePath "vbr-ks.cfg" -TargetLine "/opt/veeam/hostmanager/veeamhostmanager --apply_init_config /etc/veeam/vbr_init.cfg" -LinesToInsert $CustomVCSPBlock
+        Write-Log "VCSP block inserted into kickstart" 'Info'
     }
 
     if ($NodeExporter) {
@@ -784,12 +798,15 @@ try {
         Insert-AfterLine -FilePath "vbr-ks.cfg" -TargetLine 'dnf install -y --nogpgcheck --disablerepo="*" /tmp/static-packages/*.rpm' -LinesToInsert $NodeExporterSetupBlock
         Insert-AfterLine -FilePath "vbr-ks.cfg" -TargetLine "/usr/bin/cp -rv /tmp/*.* /mnt/sysimage/var/log/appliance-installation-logs/" -LinesToInsert $CopyNodeExporterBlock
         Insert-AfterLine -FilePath "vbr-ks.cfg" -TargetLine "/opt/veeam/hostmanager/veeamhostmanager --apply_init_config /etc/veeam/vbr_init.cfg" -LinesToInsert $Node_ExporterFWBlock
+        Write-Log "Node exporter block inserted into kickstart" 'Info'
+        Write-Log "Starting node exporter file copy" 'Info'
         Safe-ExternalCommand "wsl xorriso -boot_image any keep -dev `"$LocalISO`" -map node_exporter /node_exporter *> `$null"
         Write-Log "Node exporter folder copied to ISO" 'Info'
     }
     #endregion
 
     #region Normalize Line Endings
+    Write-Log "Normalizing line endings" 'Info'
     (Get-Content "vbr-ks.cfg" -Raw).Replace("`r`n", "`n") | Set-Content "vbr-ks.cfg"
     (Get-Content "grub.cfg" -Raw).Replace("`r`n", "`n") | Set-Content "grub.cfg"
     Write-Log "Normalized line endings." 'Info'
