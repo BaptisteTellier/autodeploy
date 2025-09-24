@@ -5,7 +5,7 @@
 [![Platform](https://img.shields.io/badge/Platform-Windows%2BWSL-lightgrey.svg)](https://docs.microsoft.com/en-us/windows/wsl/)
 [![Veeam](https://img.shields.io/badge/Veeam-v13.0-00B336.svg)](https://www.veeam.com/)
 
-> 🚀 **Enterprise-grade PowerShell automation tool for customizing Veeam Backup & Replication appliance ISO files with comprehensive Rocky Linux deployment automation.**
+> 🚀 **Enterprise-grade PowerShell automation tool for customizing Veeam Software Appliance ISO files.**
 
 ## Overview
 
