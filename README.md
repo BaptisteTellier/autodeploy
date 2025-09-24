@@ -70,8 +70,6 @@ This advanced PowerShell script automates the customization of Veeam Software Ap
 
 ## Quick Start
 
-## Quick Start
-
 ### Using JSON Configuration (Recommended)
 
 1. Create a JSON configuration file like the example below or download it from the repo :
