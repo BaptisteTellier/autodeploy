@@ -276,7 +276,7 @@ The script automatically creates systemd services for:
 ## Support
 
 ### Documentation Resources
-- [Veeam Backup & Replication Documentation](https://helpcenter.veeam.com/docs/backup/)
+- [Veeam Backup & Replication Documentation](https://helpcenter.veeam.com/docs/vbr/userguide/overview.html?ver=13)
 - [PowerShell Documentation](https://docs.microsoft.com/en-us/powershell/)
 - [Rocky Linux Kickstart Guide](https://docs.rockylinux.org/guides/automation/kickstart/)
 - [Node Exporter Releases](https://github.com/prometheus/node_exporter/releases)
