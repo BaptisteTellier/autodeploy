@@ -65,6 +65,16 @@ This advanced PowerShell script automates the customization of Veeam Software Ap
     `
     wsl --version
     `
+### Optionnal Dependencies
+**License file**
+- 'license' folder at / of the folder where you run the script
+- xxx.lic file inside the folder and xxx.lic for the lic parameter
+
+**node_exporter**
+- 'node_exporter' folder at / of the folder where you run the script
+- `LICENSE + node_exporter + NOTICE` inside the folder
+- where `node_exporter` is the uncompressed binary downloaded from offical repo
+- Warning : “fapolicyd” disallow execution of random binary – might not work in the future. Need to add node_exporter repository and rpm file installation instead
 
 ---
 
