@@ -5,6 +5,14 @@ Veeam Appliance ISO Automation Tool
 .LICENSE
 MIT License - see LICENSE file for details
 
+.AUTHOR
+Baptiste TELLIER
+
+.COPYRIGHT
+Copyright (c) 2025 Baptiste TELLIER
+
+.VERSION 2.0
+
 .DESCRIPTION
 This PowerShell script provides automation for customizing Veeam Software Appliance ISO files to enable fully automated, unattended installations. 
 The script is designed to run in the same directory as the source ISO file and creates customized copies without complex path handling.
