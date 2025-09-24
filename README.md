@@ -9,57 +9,34 @@
 
 ## Overview
 
-This advanced PowerShell script provides end-to-end automation for customizing Veeam Software Appliance ISO files, enabling fully automated, unattended installations with enterprise-grade configurations. The tool extracts and modifies critical configuration files including GRUB bootloader settings and Kickstart configuration files, implementing comprehensive customizations for network configuration, regional settings, security parameters, and optional component deployment.
+This advanced PowerShell script automates the customization of Veeam Software Appliance ISO files, enabling fully automated, unattended appliance deployments with enterprise-grade, reusable configurations. It supports JSON configuration loading, out-of-place ISO modification, path-safe working in the current directory, advanced logging, and optional backup creation. Network, security, and monitoring details can be configured to fit enterprise environments.
 
-### Why Use This Tool?
+---
 
-- ✅ **Zero-Touch Deployment**: Fully automated Veeam appliance installations with pre-configured settings
-- ✅ **Network Flexibility**: Comprehensive support for both DHCP and static IP configurations with validation
-- ✅ **Enterprise Security**: Multi-factor authentication, secure password management, and recovery tokens
-- ✅ **Monitoring Ready**: Optional Prometheus node_exporter integration for enterprise monitoring
-- ✅ **Service Provider Ready**: Automated VCSP connection and management agent deployment
-- ✅ **In-Place Modification**: Direct ISO modification without creating new files
+## What's New (v2.0)
 
-## Key Features
+- JSON configuration support for all parameters
+- Out-of-place ISO customization by default
+- Optional backup creation for in-place editing
+- Improved script logging and in VSA logging
+- Legacy and command-line overrides still supported
 
-### 🔧 Core Functionality
-- **In-Place ISO Modification**: Directly modifies source ISO files using WSL xorriso integration
-- **GRUB Configuration**: Automated bootloader timeout, default boot selection, and installation parameters
-- **Kickstart Automation**: Complete unattended Rocky Linux installation configuration
+---
 
-### 🌐 Network Configuration
-- **DHCP Support**: Automatic network configuration with hostname assignment
-- **Static IP Configuration**: Full static network setup with comprehensive IPv4 validation
-- **Multi-DNS Support**: Configurable DNS server arrays with validation
-- **Advanced Validation**: Regex-based IP address, subnet mask, and gateway validation
+## Features
 
-### 🌍 Regional & System Settings
-- **Keyboard Layouts**: Multi-language keyboard layout support (US, FR, DE, UK, etc.)
-- **Timezone Configuration**: Comprehensive timezone support with proper continent/city validation
-- **NTP Integration**: Network time synchronization with configurable NTP servers
-- **Hostname Management**: RFC-compliant hostname configuration with validation
+- Load configuration from JSON for reproducible deployments
+- Modify ISO files (create custom copies or modify in place)
+- Automated GRUB and Kickstart configuration injection
+- DHCP and static IP support, validated in script
+- Regional keyboard & timezone settings
+- Secure password and MFA configuration for Veeam accounts
+- Prometheus node_exporter optional deployment
+- Service Provider (VCSP) integration for v13.0.1+
+- VBR tunning exemple such as Syslog server addition
+- Enterprise-level logging and error handling
 
-### 🔐 Security & Authentication
-- **Multi-Factor Authentication**: Base32 encoded MFA secret key generation and management
-- **Dual Account Management**: Separate admin and service account configurations
-- **Recovery Token System**: Automated GUID-based recovery token generation
-- **Permission Management**: Secure file permissions (600) for sensitive configuration files
-
-### 📊 Enterprise Monitoring & Management
-- **Node Exporter Integration**: Optional Prometheus monitoring agent with systemd service setup
-- **Firewall Configuration**: Automatic firewall rule creation for monitoring endpoints
-- **Syslog Integration**: Centralized logging configuration with UDP syslog support
-- **License Automation**: Automated Veeam license installation and activation
-
-### ☁️ Service Provider Features
-- **VCSP Integration**: Automated Veeam Cloud Service Provider connection (v13.0.1+)
-- **Management Agent**: Automatic installation and configuration of VCSP management agents
-- **Credential Management**: Secure credential handling and PowerShell module integration
-
-### 🛠️ Advanced Automation
-- **PowerShell Integration**: Embedded PowerShell commands for post-installation configuration
-- **Systemd Service Creation**: Automated service creation for one-shot configuration tasks
-- **Configuration File Templates**: Dynamic generation of configuration files with variable substitution
+---
 
 ## Prerequisites
 
@@ -68,157 +45,163 @@ This advanced PowerShell script provides end-to-end automation for customizing V
 - **PowerShell**: Version 5.1 or higher
 - **WSL**: Windows Subsystem for Linux (Ubuntu/Debian recommended)
 - **Memory**: Minimum 4GB RAM (8GB recommended for large ISOs)
-- **Storage**: At least 10GB free space for ISO manipulation
+- **Storage**: At least 14GB free space for ISO manipulation
 
 ### Software Dependencies
-Install xorriso in WSL (Ubuntu/Debian)
+**Software dependencies:**
+- `xorriso` installed in WSL
+    ```
+    sudo apt-get update
+    sudo apt-get install xorriso
+    ```
+- For RHEL/CentOS/Rocky:
+    ```
+    sudo yum install xorriso
+    ```
 
-`sudo apt-get update
-sudo apt-get install xorriso`
+**PowerShell configuration:**
+- Run with an appropriate execution policy
+- Confirm WSL is accessible:
+    ```
+    wsl --version
+    ```
 
-For RHEL/CentOS/Rocky Linux
-
-`sudo yum install xorriso`
-
-### PowerShell Configuration
-
-Set appropriate execution policy
-
-Verify WSL is accessible
-
-`wsl --version`
+---
 
 ## Quick Start
 
-# Example 1 : Complete static IP configuration with all optional features enable
+## Quick Start
 
-.\autodeployppxity.ps1 `
-    -LocalISO "VeeamSoftwareAppliance_13.0.0.4967_20250822.iso" 
-    -GrubTimeout 45 
-    -KeyboardLayout "us" 
-    -Timezone "America/New_York" 
-    -Hostname "veeam-backup-prod01" 
-    -UseDHCP:$false 
-    -StaticIP "10.50.100.150" 
-    -Subnet "255.255.255.0" 
-    -Gateway "10.50.100.1" 
-    -DNSServers @("10.50.1.10", "10.50.1.11", "8.8.8.8") 
-    -VeeamAdminPassword "P@ssw0rd2024!123" 
-    -VeeamAdminMfaSecretKey "ABCDEFGH12345678IJKLMNOP" 
-    -VeeamAdminIsMfaEnabled "true" 
-    -VeeamSoPassword "S3cur3P@ss!123" 
-    -VeeamSoMfaSecretKey "ZYXWVUTS87654321QPONMLKJ" 
-    -VeeamSoIsMfaEnabled "true" 
-    -VeeamSoRecoveryToken "12345678-90ab-cdef-1234-567890abcdef" 
-    -VeeamSoIsEnabled "true" 
-    -NtpServer "pool.ntp.org" 
-    -NtpRunSync "true" 
-    -NodeExporter $true 
-    -LicenseVBRTune $true 
-    -LicenseFile "Enterprise-Plus-License.lic" 
-    -SyslogServer "10.50.1.20" 
-    -VCSPConnection $true 
-    -VCSPUrl "https://vcsp.company.com" 
-    -VCSPLogin "serviceaccount" 
-    -VCSPPassword "VCSPServiceP@ss!" `
+### Using JSON Configuration (Recommended)
 
-# Example 2 : Simple DHCP configuration for lab environment with all optional features disable
+1. Create a JSON configuration file like the example below or download it from the repo :
 
-.\autodeployppxity.ps1 `
-    -LocalISO "VeeamAppliance-Lab.iso" 
-    -GrubTimeout 10 
-    -KeyboardLayout "fr" 
-    -Timezone "Europe/Paris" 
-    -Hostname "veeam-lab-test" 
-    -UseDHCP:$true 
-    -VeeamAdminPassword "LabP@ss123!123" 
-    -VeeamAdminIsMfaEnabled "false" 
-    -VeeamSoPassword "SOLabP@ss123!123" 
-    -VeeamSoIsMfaEnabled "false" 
-    -VeeamSoIsEnabled "false" 
-    -NodeExporter $false 
-    -LicenseVBRTune $false 
-    -VCSPConnection $false ` 
+    ```
+    {
+      "SourceISO": "VeeamSoftwareAppliance_13.0.0.4967_20250822.iso",
+      "OutputISO": "",
+      "InPlace": false,
+      "CreateBackup": true,
+      "CleanupCFGFiles": true,
+      "GrubTimeout": 15,
+      "KeyboardLayout": "us",
+      "Timezone": "America/New_York",
+      "Hostname": "veeam-backup-prod",
+      "UseDHCP": false,
+      "StaticIP": "192.168.1.166",
+      "Subnet": "255.255.255.0",
+      "Gateway": "192.168.1.1",
+      "DNSServers": ["192.168.1.64", "8.8.4.4", "8.8.8.8"],
+      "VeeamAdminPassword": "123q123Q123!123",
+      "VeeamAdminMfaSecretKey": "JBSWY3DPEHPK3PXP",
+      "VeeamAdminIsMfaEnabled": "true",
+      "NodeExporter": true,
+      "LicenseVBRTune": true,
+      "VCSPConnection": false
+    }
+    ```
 
-# Example 3: Enterprise deployment with German localization
+2. Place the script, ISO, and JSON in the same directory.
 
-.\autodeployppxity.ps1 `
-    -LocalISO "C:\ISOs\VeeamSoftwareAppliance_13.0.0.4967_20250822.iso" 
-    -GrubTimeout 30 
-    -KeyboardLayout "de" 
-    -Timezone "Europe/Berlin" 
-    -Hostname "veeam-enterprise-de" 
-    -UseDHCP:$false 
-    -StaticIP "192.168.10.200" 
-    -Subnet "255.255.255.0" 
-    -Gateway "192.168.10.1" 
-    -DNSServers @("192.168.10.10", "192.168.10.11") 
-    -VeeamAdminPassword "EnterprisePw2024!123" 
-    -VeeamAdminMfaSecretKey "ENTERPRISE1234567890ABCD" 
-    -VeeamAdminIsMfaEnabled "true" 
-    -VeeamSoPassword "SOEnterprisePw!123" 
-    -VeeamSoMfaSecretKey "SOENTRPRS9876543210ZYXW" 
-    -VeeamSoIsMfaEnabled "true" 
-    -VeeamSoRecoveryToken "aaaabbbb-cccc-dddd-eeee-ffffgggghhh" 
-    -VeeamSoIsEnabled "true" 
-    -NtpServer "de.pool.ntp.org" 
-    -NtpRunSync "true" 
-    -NodeExporter $false 
-    -LicenseVBRTune $true 
-    -LicenseFile "Veeam-Enterprise-Germany.lic" 
-    -SyslogServer "192.168.10.50" 
-    -VCSPConnection $false `
+3. Run:
+    ```
+    .\autodeployppxity.ps1 -ConfigFile "production-config.json"
+    ```
+
+### Command Line Overrides
+
+Any parameter specified on the command line will override the value in JSON.
+
+    ```
+    .\autodeployppxity.ps1 -ConfigFile "base-config.json" -Hostname "custom-host" -OutputISO "custom-output.iso"
+    ```
+
+### Legacy Usage (all parameters on command line)
+
+    ```
+    .\autodeployppxity.ps1 `
+        -SourceISO "VeeamSoftwareAppliance_13.0.0.4967_20250822.iso" `
+        -GrubTimeout 45 `
+        -KeyboardLayout "us" `
+        -Timezone "America/New_York" `
+        -Hostname "veeam-backup-prod01" `
+        -UseDHCP:$false `
+        -StaticIP "10.50.100.150" `
+        -Subnet "255.255.255.0" `
+        -Gateway "10.50.100.1" `
+        -DNSServers @("10.50.1.10", "10.50.1.11", "8.8.8.8") `
+        -VeeamAdminPassword "P@ssw0rd2024!123" `
+        -NodeExporter $true `
+        -LicenseVBRTune $true `
+        -VCSPConnection $true
+    ```
+
+---
 
 ## Configuration Parameters
 
-### Core System Parameters
-| Parameter | Type | Description | Default | Required |
-|-----------|------|-------------|---------|----------|
-| `LocalISO` | String | Path to source Veeam ISO file | `VeeamSoftwareAppliance_13.0.0.4967_20250822.iso` | ✅ |
-| `GrubTimeout` | Integer | GRUB timeout in seconds | `30` | ❌ |
-| `KeyboardLayout` | String | Keyboard layout code | `fr` | ❌ |
-| `Timezone` | String | System timezone | `Europe/Paris` | ❌ |
-| `Hostname` | String | System hostname | `veeam-server` | ❌ |
+### Core Parameters
 
-### Network Configuration
-| Parameter | Type | Description | Default | Notes |
-|-----------|------|-------------|---------|-------|
-| `UseDHCP` | Switch | Enable DHCP configuration | `$true` | When true, static params ignored |
-| `StaticIP` | String | Static IP address | `192.168.1.166` | Required when DHCP disabled |
-| `Subnet` | String | Subnet mask | `255.255.255.0` | Required when DHCP disabled |
-| `Gateway` | String | Gateway IP address | `192.168.1.1` | Required when DHCP disabled |
-| `DNSServers` | Array | DNS server addresses | `@("192.168.1.64", "8.8.4.4")` | Optional for static config |
+| Parameter | Type   | Description                      | Default                                   | Required     |
+|-----------|--------|----------------------------------|-------------------------------------------|-------------|
+| ConfigFile    | String | Path to JSON file                 | ""                                        | No          |
+| SourceISO     | String | Source ISO filename (required)    | VeeamSoftwareAppliance_13.0.0.4967_20250822.iso | Yes         |
+| OutputISO     | String | Customized ISO filename           | auto (adds _customized)                   | No          |
+| InPlace       | Bool   | Modify original ISO directly      | false                                     | No          |
+| CreateBackup  | Bool   | Create backup for InPlace changes | true                                      | No          |
+| CleanupCFGFiles| Bool  | Clean temp config files           | true                                      | No          |
+| GrubTimeout   | Int    | GRUB timeout (seconds)            | 10                                        | No          |
+| KeyboardLayout| String | Keyboard code                     | fr                                        | No          |
+| Timezone      | String | System timezone                   | Europe/Paris                              | No          |
+| Hostname      | String | Hostname for appliance            | veeam-server                              | No          |
 
-### Veeam Security Configuration
+### Network Parameters
+
+| Parameter   | Type     | Description                     | Default         |
+|-------------|----------|---------------------------------|-----------------|
+| UseDHCP     | Bool     | Use DHCP for network config     | false           |
+| StaticIP    | String   | Static IP address               | 192.168.1.166   |
+| Subnet      | String   | Subnet mask                     | 255.255.255.0   |
+| Gateway     | String   | Gateway IP                      | 192.168.1.1     |
+| DNSServers  | Array    | DNS servers (comma-separated)   | ["192.168.1.64", "8.8.4.4"] |
+
+### Veeam Security Appliance Parameters
+
 | Parameter | Type | Description | Default |
 |-----------|------|-------------|---------|
-| `VeeamAdminPassword` | String | Admin account password | `123q123Q123!123` |
-| `VeeamAdminMfaSecretKey` | String | Admin MFA secret (Base32) | `JBSWY3DPEHPK3PXP` |
-| `VeeamAdminIsMfaEnabled` | String | Enable admin MFA | `true` |
-| `VeeamSoPassword` | String | Service account password | `123w123W123!123` |
-| `VeeamSoMfaSecretKey` | String | Service MFA secret (Base32) | `JBSWY3DPEHPK3PXP` |
-| `VeeamSoIsMfaEnabled` | String | Enable service MFA | `true` |
-| `VeeamSoRecoveryToken` | String | Recovery token (GUID) | `aaaabbbb-cccc-dddd-eeee-ffffgggghhh` |
-| `VeeamSoIsEnabled` | String | Enable service account | `true` |
+| VeeamAdminPassword | String | Password for Veeam admin account. Must meet complexity requirements (15+ chars with mixed case, numbers, symbols) | `123q123Q123!123` |
+| VeeamAdminMfaSecretKey | String | Base32-encoded MFA secret key for admin account TOTP authentication (16-32 characters) | `JBSWY3DPEHPK3PXP` |
+| VeeamAdminIsMfaEnabled | String | Enable/disable multi-factor authentication for admin account ("true"/"false") | `"true"` |
+| VeeamSoPassword | String | Password for Veeam Security Officer (SO) account. Must meet same complexity requirements as admin | `123w123W123!123` |
+| VeeamSoMfaSecretKey | String | Base32-encoded MFA secret key for SO account TOTP authentication | `JBSWY3DPEHPK3PXP` |
+| VeeamSoIsMfaEnabled | String | Enable/disable multi-factor authentication for SO account ("true"/"false") | `"true"` |
+| VeeamSoRecoveryToken | String | GUID-format recovery token for SO account emergency access and recovery scenarios | `eb9fcbf4-2be6-e94d-4203-dded67c5a450` |
+| VeeamSoIsEnabled | String | Enable/disable the Security Officer account entirely ("true"/"false") | `"true"` |
+| NtpServer | String | Network Time Protocol server for time synchronization (FQDN or IP address) | `time.nist.gov` |
+| NtpRunSync | String | Enable automatic time synchronization on boot ("true"/"false") | `"false"` |
 
 ### Optional Features
-| Parameter | Type | Description | Default |
-|-----------|------|-------------|---------|
-| `NodeExporter` | Boolean | Deploy Prometheus monitoring | `$false` |
-| `LicenseVBRTune` | Boolean | Auto-install license | `$false` |
-| `LicenseFile` | String | License filename | `Veeam-100instances-entplus-monitoring-nfr.lic` |
-| `SyslogServer` | String | Syslog server IP | `172.17.53.28` |
-| `VCSPConnection` | Boolean | Connect to VCSP | `$false` |
-| `VCSPUrl` | String | VCSP server URL | `192.168.1.202` |
-| `VCSPLogin` | String | VCSP login | `v13` |
-| `VCSPPassword` | String | VCSP password | `Azerty123!` |
 
-## Security Considerations
+| Parameter           | Type    | Description                      | Default                                   |
+|---------------------|---------|----------------------------------|-------------------------------------------|
+| NodeExporter        | Bool    | Deploy Prometheus node_exporter  | false                                     |
+| LicenseVBRTune      | Bool    | Auto-install Veeam license       | false                                     |
+| LicenseFile         | String  | License filename                 | Veeam-100instances-entplus-monitoring-nfr.lic |
+| SyslogServer        | String  | Syslog server IP                 | 172.17.53.28                              |
+| VCSPConnection      | Bool    | Connect to VCSP                  | false                                     |
+| VCSPUrl             | String  | VCSP server URL                  | ""                                        |
+| VCSPLogin           | String  | VCSP login                       | ""                                        |
+| VCSPPassword        | String  | VCSP password                    | ""                                        |
 
-### Password Security
-- **Complexity Requirements**: Use passwords with minimum 15 characters including uppercase, lowercase, numbers, and special characters
-- **MFA Integration**: Base32 encoded secret keys (16-32 characters) for TOTP authentication
-- **Recovery Tokens**: GUID format tokens for account recovery scenarios
+---
+
+### Security Notes
+
+- **Password Requirements**: Both admin and SO passwords should be at least 15 characters long with uppercase, lowercase, numbers, and special characters for enterprise security
+- **MFA Secret Keys**: Must be valid Base32-encoded strings (A-Z, 2-7, no padding) for compatibility with TOTP authenticators like Google Authenticator or Microsoft Authenticator
+- **Recovery Tokens**: Should follow standard GUID format (8-4-4-4-12 hexadecimal digits) for account recovery scenarios
+- **Security Officer Account**: The SO account provides service-level access separate from the administrative account for improved security separation
+- **NTP Configuration**: Proper time synchronization is critical for Veeam operations, especially in distributed environments
 
 ### Network Security
 - **IP Validation**: Comprehensive IPv4 address format validation using regex patterns
@@ -228,41 +211,31 @@ Verify WSL is accessible
 ### File Security
 - **Transcript Logging**: Comprehensive logging with timestamp and severity levels
 
-## Advanced Features
+---
 
-### Automated Service Creation
+## Optional feature
+
+### Node_Exporter
 The script automatically creates systemd services for:
-- **Node Exporter**: Prometheus monitoring with firewall configuration
+- **Node Exporter**: Prometheus monitoring with firewall configuration 9100
 - **Veeam Initialization**: One-shot service for post-boot configuration
-- **Firewall Management**: Automatic port opening for monitoring services (TCP/9100)
 
-### PowerShell Integration
-- **Module Loading**: Automatic Veeam PowerShell module import
-- **License Installation**: Automated license deployment and activation  
-- **VCSP Connection**: Cloud service provider integration with credential management
+### VBR Tunning
+- **License Installation**: Automated license deployment and activation
+- **Run custom script** : Exemple PS script run Add Syslog Server
 
-### Configuration Management
-- **Template Generation**: Dynamic configuration file creation with variable substitution
-- **Init Wizard Disable**: Automatic UI initialization bypass for unattended deployment
-- **Post-Installation Scripts**: Embedded bash and PowerShell scripts for system configuration
+### VCSP Connection
+- **VCSP Connection**: Veeam Service service provider integration with credential management
+
+---
 
 ## Troubleshooting
 
-### Common Issues
-
-#### WSL/xorriso Configuration
-Verify WSL installation
-
-`wsl --list --verbose`
-
-Install xorriso if missing
-
-`wsl sudo apt-get update
-wsl sudo apt-get install xorriso`
-
-Test xorriso functionality
-
-`wsl xorriso --version`
+- Ensure WSL is installed and available (`wsl --list --verbose`)
+- Install `xorriso` in WSL (`sudo apt-get install xorriso`)
+- Confirm ISO file is located in the same directory as the script
+- Use correct JSON structure; command parameters override JSON if specified
+- Check log file `ISO_Customization.log` for timestamped error messages
 
 #### Network Configuration Validation
 - **IP Format**: Ensure IP addresses match IPv4 format (xxx.xxx.xxx.xxx)
@@ -274,17 +247,14 @@ Test xorriso functionality
 - **Permissions**: Verify read/write access to ISO file location
 - **Path Format**: Use full paths for ISO files in different directories
 
-### Debug and Logging
-- **Verbose Logging**: All operations include timestamped logging with severity levels
-- **Error Handling**: Comprehensive try-catch blocks with detailed error messages
-- **Command Validation**: Safe external command execution with success/failure tracking
+---
 
 ## Contributing
 
-We welcome contributions from the community!
+1. Fork this repo and create a pull request to suggest improvements.
+2. Use [GitHub Issues](https://github.com/PleXi00/autodeploy/issues) for bugs or feature requests.
 
-### Reporting Issues
-Please use the [GitHub Issues](https://github.com/PleXi00/autodeploy/issues) page to report bugs or request features.
+---
 
 ## TO DO
 
@@ -302,31 +272,22 @@ Please use the [GitHub Issues](https://github.com/PleXi00/autodeploy/issues) pag
 - [Rocky Linux Kickstart Guide](https://docs.rockylinux.org/guides/automation/kickstart/)
 - [Node Exporter Releases](https://github.com/prometheus/node_exporter/releases)
 
-### Community Support
-- [GitHub Issues](https://github.com/PleXi00/autodeploy/issues) - Bug reports and feature requests
-- [GitHub Discussions](https://github.com/PleXi00/autodeploy/discussions) - Community discussions
 
-### Author Information
-- **Author**: Baptiste TELLIER
-- **Version**: 2.0
-- **Creation Date**: September 22, 2025
-- **Prerequisites**: PowerShell 5.1+, WSL with xorriso
+## Author & Stats
 
----
-
-## Project Stats
+**Author**: Baptiste TELLIER  
+**Version**: 2.0  
+**Creation**: September 24, 2025
 
 ![GitHub stars](https://img.shields.io/github/stars/PleXi00/autodeploy)
 ![GitHub forks](https://img.shields.io/github/forks/PleXi00/autodeploy)
 ![GitHub issues](https://img.shields.io/github/issues/PleXi00/autodeploy)
 ![GitHub last commit](https://img.shields.io/github/last-commit/PleXi00/autodeploy)
 
-**Made with ❤️ for the Veeam community by Baptiste TELLIER**
+---
+
+_Made with ❤️ for the Veeam community by Baptiste TELLIER and the help of AI_
 
 ---
 
-*⭐ If this project helped automate your Veeam deployments, please consider giving it a star on GitHub!*
-
----
-
-Readme made with the help of AI
+*If this project helps you automate Veeam deployments, please give it a star on GitHub!*
