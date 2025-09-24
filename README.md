@@ -1,4 +1,4 @@
-# Veeam Appliance ISO Automation Tool
+# Veeam Software Appliance ISO Automation Tool
 
 [![PowerShell](https://img.shields.io/badge/PowerShell-5.1%2B-blue.svg)](https://docs.microsoft.com/en-us/powershell/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
