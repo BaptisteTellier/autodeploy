@@ -50,21 +50,21 @@ This advanced PowerShell script automates the customization of Veeam Software Ap
 ### Software Dependencies
 **Software dependencies:**
 - `xorriso` installed in WSL
-    ```
+    `
     sudo apt-get update
     sudo apt-get install xorriso
-    ```
+    `
 - For RHEL/CentOS/Rocky:
-    ```
+    `
     sudo yum install xorriso
-    ```
+    `
 
 **PowerShell configuration:**
 - Run with an appropriate execution policy
 - Confirm WSL is accessible:
-    ```
+    `
     wsl --version
-    ```
+    `
 
 ---
 
@@ -76,7 +76,7 @@ This advanced PowerShell script automates the customization of Veeam Software Ap
 
 1. Create a JSON configuration file like the example below or download it from the repo :
 
-    ```
+    `
     {
       "SourceISO": "VeeamSoftwareAppliance_13.0.0.4967_20250822.iso",
       "OutputISO": "",
@@ -99,26 +99,26 @@ This advanced PowerShell script automates the customization of Veeam Software Ap
       "LicenseVBRTune": true,
       "VCSPConnection": false
     }
-    ```
+    `
 
 2. Place the script, ISO, and JSON in the same directory.
 
 3. Run:
-    ```
+    `
     .\autodeployppxity.ps1 -ConfigFile "production-config.json"
-    ```
+    `
 
 ### Command Line Overrides
 
 Any parameter specified on the command line will override the value in JSON.
 
-    ```
+    `
     .\autodeployppxity.ps1 -ConfigFile "base-config.json" -Hostname "custom-host" -OutputISO "custom-output.iso"
-    ```
+    `
 
 ### Legacy Usage (all parameters on command line)
 
-    ```
+    `
     .\autodeployppxity.ps1 `
         -SourceISO "VeeamSoftwareAppliance_13.0.0.4967_20250822.iso" `
         -GrubTimeout 45 `
@@ -134,7 +134,7 @@ Any parameter specified on the command line will override the value in JSON.
         -NodeExporter $true `
         -LicenseVBRTune $true `
         -VCSPConnection $true
-    ```
+    `
 
 ---
 
