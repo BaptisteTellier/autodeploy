@@ -258,9 +258,10 @@ The script automatically creates systemd services for:
 
 - [x] Parameters to change Hostname ✅ **Completed**
 - [x] Function to change IP / DHCP ✅ **Completed**
-- [ ] Move away from WSL and use oscdimg.exe
+- [ ] Move away from WSL and perhaps use oscdimg.exe ?
 - [ ] Support for multiple ISO formats (JEoS & VSA)
-- [ ] Automated backup creation before modification
+- [x] Automated backup creation before modification ✅ **Completed**
+- [x] Support for JSON configuration file ✅ **Completed**
 
 ## Support
 
