@@ -76,7 +76,7 @@ This advanced PowerShell script automates the customization of Veeam Software Ap
 
 1. Create a JSON configuration file like the example below or download it from the repo :
 
-    `
+    ```
     {
       "SourceISO": "VeeamSoftwareAppliance_13.0.0.4967_20250822.iso",
       "OutputISO": "",
@@ -99,7 +99,7 @@ This advanced PowerShell script automates the customization of Veeam Software Ap
       "LicenseVBRTune": true,
       "VCSPConnection": false
     }
-    `
+    ```
 
 2. Place the script, ISO, and JSON in the same directory.
 
