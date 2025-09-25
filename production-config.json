@@ -16,7 +16,7 @@
   "DNSServers": ["192.168.1.64", "8.8.8.4", "8.8.8.8"],
   "VeeamAdminPassword": "123q123Q123!123",
   "VeeamAdminMfaSecretKey": "JBSWY3DPEHPK3PXP",
-  "VeeamAdminIsMfaEnabled": "true",
+  "VeeamAdminIsMfaEnabled": "false",
   "VeeamSoPassword": "123w123W123!123",
   "VeeamSoMfaSecretKey": "JBSWY3DPEHPK3PXP",
   "VeeamSoIsMfaEnabled": "true",
