@@ -13,8 +13,6 @@ This advanced PowerShell script automates the customization of Veeam Software Ap
 
 ---
 
----
-
 ## What's New (v2.1)
 
 - Fix network issue not applied correctly
@@ -83,28 +81,42 @@ This advanced PowerShell script automates the customization of Veeam Software Ap
 1. Create a JSON configuration file like the example below or download it from the repo :
 
     ```
-    {
-      "SourceISO": "VeeamSoftwareAppliance_13.0.0.4967_20250822.iso",
-      "OutputISO": "",
-      "InPlace": false,
-      "CreateBackup": true,
-      "CleanupCFGFiles": true,
-      "GrubTimeout": 15,
-      "KeyboardLayout": "us",
-      "Timezone": "America/New_York",
-      "Hostname": "veeam-backup-prod",
-      "UseDHCP": false,
-      "StaticIP": "192.168.1.166",
-      "Subnet": "255.255.255.0",
-      "Gateway": "192.168.1.1",
-      "DNSServers": ["192.168.1.64", "8.8.4.4", "8.8.8.8"],
-      "VeeamAdminPassword": "123q123Q123!123",
-      "VeeamAdminMfaSecretKey": "JBSWY3DPEHPK3PXP",
-      "VeeamAdminIsMfaEnabled": "true",
-      "NodeExporter": true,
-      "LicenseVBRTune": true,
-      "VCSPConnection": false
-    }
+{
+  "SourceISO": "VeeamSoftwareAppliance_13.0.0.4967_20250822.iso",
+  "OutputISO": "",
+  "InPlace": false,
+  "CreateBackup": true,
+  "CleanupCFGFiles": false,
+  "CFGOnly": false,
+  "GrubTimeout": 15,
+  "KeyboardLayout": "fr",
+  "Timezone": "Europe/Paris",
+  "Hostname": "veeam-backup",
+  "UseDHCP": false,
+  "StaticIP": "192.168.1.166",
+  "Subnet": "255.255.255.0",
+  "Gateway": "192.168.1.1",
+  "DNSServers": ["192.168.1.64", "8.8.8.4", "8.8.8.8"],
+  "VeeamAdminPassword": "123q123Q123!123",
+  "VeeamAdminMfaSecretKey": "JBSWY3DPEHPK3PXP",
+  "VeeamAdminIsMfaEnabled": "false",
+  "VeeamSoPassword": "123w123W123!123",
+  "VeeamSoMfaSecretKey": "JBSWY3DPEHPK3PXP",
+  "VeeamSoIsMfaEnabled": "true",
+  "VeeamSoRecoveryToken": "12345678-90ab-cdef-1234-567890abcdef",
+  "VeeamSoIsEnabled": "true",
+  "NtpServer": "time.nist.gov",
+  "NtpRunSync": "true",
+  "NodeExporter": false,
+  "NodeExporterDNF": true,
+  "LicenseVBRTune": true,
+  "LicenseFile": "Veeam-100instances-entplus-monitoring-nfr.lic",
+  "SyslogServer": "172.17.53.28",
+  "VCSPConnection": false,
+  "VCSPUrl": "",
+  "VCSPLogin": "",
+  "VCSPPassword": ""
+}
     ```
 
 2. Place the script, ISO, and JSON in the same directory.
