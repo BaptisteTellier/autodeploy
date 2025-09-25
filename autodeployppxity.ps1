@@ -11,7 +11,7 @@ Baptiste TELLIER
 .COPYRIGHT
 Copyright (c) 2025 Baptiste TELLIER
 
-.VERSION 2.0
+.VERSION 2.1
 
 .DESCRIPTION
 This PowerShell script provides automation for customizing Veeam Software Appliance ISO files to enable fully automated, unattended installations. 
@@ -55,6 +55,10 @@ Only effective when InPlace is $true. Default: $true
 .PARAMETER CleanupCFGFiles
 Switch parameter to keep grub.cfg and vbr-ks.cfg for debug
 Default: $true
+
+.PARAMETER CFGOnly
+Switch parameter to only create grub.cfg and vbr-ks.cfg for debug
+Default: $false
 
 .PARAMETER GrubTimeout
 Sets the GRUB bootloader timeout value in seconds. Default: 10
@@ -153,6 +157,10 @@ Default: "time.nist.gov"
 Boolean flag to enable node_exporter deployment. 
 Default: $false
 
+.PARAMETER NodeExporterDNF
+Boolean flag to enable node_exporter deployment using DNF package manager.
+Default: $false
+
 .PARAMETER LicenseVBRTune
 Boolean flag to enable automatic Veeam license installation. Default: $false
 
@@ -163,10 +171,6 @@ Default: $false
 .EXAMPLE
 Using JSON configuration file (Recommended)
 .\autodeployppxity.ps1 -ConfigFile "production-config.json"
-
-.EXAMPLE
-Using JSON configuration with command line overrides
-.\autodeployppxity.ps1 -ConfigFile "base-config.json" -Hostname "custom-hostname" -OutputISO "custom-output.iso"
 
 .EXAMPLE
 Traditional parameter usage (legacy)
@@ -202,6 +206,8 @@ See example JSON file for proper structure and supported parameters.
 
 OUTPUT:
 - Customized ISO
+- grub.cfg (optional)
+- vbr-ks.cfg (optional)
 - ISO_Customization.log
 
 #>
@@ -215,10 +221,10 @@ param (
     [string]$SourceISO = "VeeamSoftwareAppliance_13.0.0.4967_20250822.iso",
     [string]$OutputISO = "",  # If empty, uses SourceISO name with "_customized" suffix
     [switch]$InPlace = $false,  # Set to $true to modify original ISO
-    [switch]$CreateBackup = $true,  # Create backup when using InPlace
+    [bool]$CreateBackup = $true,  # Create backup when using InPlace
 
     ##DEBUG### 
-    [switch]$CleanupCFGFiles = $true, #$true to clean CFG file from folder
+    [bool]$CleanupCFGFiles = $true, #$true to clean CFG file from folder
     [bool]$CFGOnly = $false, #no ISO creation - only CFG files in folder. Automatic set $CleanupCFGFiles=$false, $CreateBackup=$false and $InPlace=$true
 
     ##### GRUB Configuration #####
