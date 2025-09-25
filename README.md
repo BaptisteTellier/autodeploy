@@ -1,4 +1,4 @@
-# Veeam Appliance ISO Automation Tool
+# Veeam Software Appliance ISO Automation Tool
 
 [![PowerShell](https://img.shields.io/badge/PowerShell-5.1%2B-blue.svg)](https://docs.microsoft.com/en-us/powershell/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
@@ -12,6 +12,14 @@
 This advanced PowerShell script automates the customization of Veeam Software Appliance ISO files, enabling fully automated, unattended appliance deployments with enterprise-grade, reusable configurations. It supports JSON configuration loading, out-of-place ISO modification, path-safe working in the current directory, advanced logging, and optional backup creation. Network, security, and monitoring details can be configured to fit enterprise environments.
 
 ---
+
+---
+
+## What's New (v2.1)
+
+- Fix network issue not applied correctly
+- CFGOnly parameter to create cfg file without iso creation or modification
+- NodeExporterDNF parameter to install Node Exporter with DNF (require online)
 
 ## What's New (v2.0)
 
@@ -70,8 +78,6 @@ This advanced PowerShell script automates the customization of Veeam Software Ap
 
 ## Quick Start
 
-## Quick Start
-
 ### Using JSON Configuration (Recommended)
 
 1. Create a JSON configuration file like the example below or download it from the repo :
@@ -108,15 +114,7 @@ This advanced PowerShell script automates the customization of Veeam Software Ap
     .\autodeployppxity.ps1 -ConfigFile "production-config.json"
     `
 
-### Command Line Overrides
-
-Any parameter specified on the command line will override the value in JSON.
-
-    `
-    .\autodeployppxity.ps1 -ConfigFile "base-config.json" -Hostname "custom-host" -OutputISO "custom-output.iso"
-    `
-
-### Legacy Usage (all parameters on command line)
+### Legacy Usage (all parameters on command line to override default)
 
     `
     .\autodeployppxity.ps1 `
@@ -150,6 +148,7 @@ Any parameter specified on the command line will override the value in JSON.
 | InPlace       | Bool   | Modify original ISO directly      | false                                     | No          |
 | CreateBackup  | Bool   | Create backup for InPlace changes | true                                      | No          |
 | CleanupCFGFiles| Bool  | Clean temp config files           | true                                      | No          |
+| CFGOnly | Bool  | write cfg file and don't work with iso   | false                                     | No          |
 | GrubTimeout   | Int    | GRUB timeout (seconds)            | 10                                        | No          |
 | KeyboardLayout| String | Keyboard code                     | fr                                        | No          |
 | Timezone      | String | System timezone                   | Europe/Paris                              | No          |
@@ -184,7 +183,8 @@ Any parameter specified on the command line will override the value in JSON.
 
 | Parameter           | Type    | Description                      | Default                                   |
 |---------------------|---------|----------------------------------|-------------------------------------------|
-| NodeExporter        | Bool    | Deploy Prometheus node_exporter  | false                                     |
+| NodeExporter        | Bool    | Deploy Prometheus node_exporter Local folder required | false                                     |
+| NodeExporterDNF     | Bool    | Deploy Prometheus node_exporter Online required | false                                     |
 | LicenseVBRTune      | Bool    | Auto-install Veeam license       | false                                     |
 | LicenseFile         | String  | License filename                 | Veeam-100instances-entplus-monitoring-nfr.lic |
 | SyslogServer        | String  | Syslog server IP                 | 172.17.53.28                              |
@@ -262,7 +262,7 @@ The script automatically creates systemd services for:
 - [x] Function to change IP / DHCP ✅ **Completed**
 - [ ] Move away from WSL and use oscdimg.exe
 - [ ] Support for multiple ISO formats (JEoS & VSA)
-- [ ] Automated backup creation before modification
+- [x] Automated backup creation before modification ✅ **Completed**
 
 ## Support
 
@@ -276,8 +276,8 @@ The script automatically creates systemd services for:
 ## Author & Stats
 
 **Author**: Baptiste TELLIER  
-**Version**: 2.0  
-**Creation**: September 24, 2025
+**Version**: 2.1  
+**Creation**: September 26, 2025
 
 ![GitHub stars](https://img.shields.io/github/stars/PleXi00/autodeploy)
 ![GitHub forks](https://img.shields.io/github/forks/PleXi00/autodeploy)
