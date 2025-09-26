@@ -1,5 +1,4 @@
 # Veeam Software Appliance ISO Automation Tool
-# Veeam Software Appliance ISO Automation Tool
 
 [![PowerShell](https://img.shields.io/badge/PowerShell-5.1%2B-blue.svg)](https://docs.microsoft.com/en-us/powershell/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
@@ -92,42 +91,42 @@ This advanced PowerShell script automates the customization of Veeam Software Ap
 1. Create a JSON configuration file like the example below or download it from the repo :
 
     ```
-{
-  "SourceISO": "VeeamSoftwareAppliance_13.0.0.4967_20250822.iso",
-  "OutputISO": "",
-  "InPlace": false,
-  "CreateBackup": true,
-  "CleanupCFGFiles": false,
-  "CFGOnly": false,
-  "GrubTimeout": 15,
-  "KeyboardLayout": "fr",
-  "Timezone": "Europe/Paris",
-  "Hostname": "veeam-backup",
-  "UseDHCP": false,
-  "StaticIP": "192.168.1.166",
-  "Subnet": "255.255.255.0",
-  "Gateway": "192.168.1.1",
-  "DNSServers": ["192.168.1.64", "8.8.8.4", "8.8.8.8"],
-  "VeeamAdminPassword": "123q123Q123!123",
-  "VeeamAdminMfaSecretKey": "JBSWY3DPEHPK3PXP",
-  "VeeamAdminIsMfaEnabled": "false",
-  "VeeamSoPassword": "123w123W123!123",
-  "VeeamSoMfaSecretKey": "JBSWY3DPEHPK3PXP",
-  "VeeamSoIsMfaEnabled": "true",
-  "VeeamSoRecoveryToken": "12345678-90ab-cdef-1234-567890abcdef",
-  "VeeamSoIsEnabled": "true",
-  "NtpServer": "time.nist.gov",
-  "NtpRunSync": "true",
-  "NodeExporter": false,
-  "NodeExporterDNF": true,
-  "LicenseVBRTune": true,
-  "LicenseFile": "Veeam-100instances-entplus-monitoring-nfr.lic",
-  "SyslogServer": "172.17.53.28",
-  "VCSPConnection": false,
-  "VCSPUrl": "",
-  "VCSPLogin": "",
-  "VCSPPassword": ""
-}
+    {
+      "SourceISO": "VeeamSoftwareAppliance_13.0.0.4967_20250822.iso",
+      "OutputISO": "",
+      "InPlace": false,
+      "CreateBackup": true,
+      "CleanupCFGFiles": false,
+      "CFGOnly": false,
+      "GrubTimeout": 15,
+      "KeyboardLayout": "fr",
+      "Timezone": "Europe/Paris",
+      "Hostname": "veeam-backup",
+      "UseDHCP": false,
+      "StaticIP": "192.168.1.166",
+      "Subnet": "255.255.255.0",
+      "Gateway": "192.168.1.1",
+      "DNSServers": ["192.168.1.64", "8.8.8.4", "8.8.8.8"],
+      "VeeamAdminPassword": "123q123Q123!123",
+      "VeeamAdminMfaSecretKey": "JBSWY3DPEHPK3PXP",
+      "VeeamAdminIsMfaEnabled": "false",
+      "VeeamSoPassword": "123w123W123!123",
+      "VeeamSoMfaSecretKey": "JBSWY3DPEHPK3PXP",
+      "VeeamSoIsMfaEnabled": "true",
+      "VeeamSoRecoveryToken": "12345678-90ab-cdef-1234-567890abcdef",
+      "VeeamSoIsEnabled": "true",
+      "NtpServer": "time.nist.gov",
+      "NtpRunSync": "true",
+      "NodeExporter": false,
+      "NodeExporterDNF": true,
+      "LicenseVBRTune": true,
+      "LicenseFile": "Veeam-100instances-entplus-monitoring-nfr.lic",
+      "SyslogServer": "172.17.53.28",
+      "VCSPConnection": false,
+      "VCSPUrl": "",
+      "VCSPLogin": "",
+      "VCSPPassword": ""
+    }
     ```
 
 2. Place the script, ISO, and JSON in the same directory.
@@ -143,7 +142,7 @@ This advanced PowerShell script automates the customization of Veeam Software Ap
 
 2. Run:
 
-    `
+    ```
     .\autodeployppxity.ps1 `
         -SourceISO "VeeamSoftwareAppliance_13.0.0.4967_20250822.iso" `
         -GrubTimeout 45 `
@@ -159,7 +158,7 @@ This advanced PowerShell script automates the customization of Veeam Software Ap
         -NodeExporter $true `
         -LicenseVBRTune $true `
         -VCSPConnection $true
-    `
+    ```
 
 ### Change default value in the script (dirty)
 
@@ -258,7 +257,19 @@ The script automatically creates systemd services for:
 
 ### VBR Tunning
 - **License Installation**: Automated license deployment and activation
-- **Run custom script** : Exemple PS script run Add Syslog Server
+- **Run custom script** : Exemple PS script : install lic and add Syslog Server
+
+Current Exemple in the script is : 
+```
+$CustomVBRBlock = @(
+    "# Custom VBR config",
+    "pwsh -Command '",
+    "Import-Module /opt/veeam/powershell/Veeam.Backup.PowerShell/Veeam.Backup.PowerShell.psd1",
+    "Install-VBRLicense -Path /etc/veeam/license/$LicenseFile",
+    "Add-VBRSyslogServer -ServerHost '$SyslogServer' -Port 514 -Protocol Udp",
+    "'"
+)
+```
 
 ### VCSP Connection
 - **VCSP Connection**: Veeam Service service provider integration with credential management & VSPC management agent flag enable
@@ -278,6 +289,7 @@ The script automatically creates systemd services for:
 - If you use optionnal features: check prerequisite and folder structure
 - Use `$CFGOnly=$true` to verify your kickstart file contain all Configurations Blocks
 - Check log file `ISO_Customization.log` for timestamped error messages
+- to browse ISO with WSL xorriso `wsl xorriso -indev "VeeamSoftwareAppliance_13.0.0.4967_20250822.iso" -ls /`
 
 ### Troubleshooting parameters
 
@@ -292,6 +304,21 @@ The script automatically creates systemd services for:
 - **Path Format**: don't use path, put ISO in the same directory to avoid issue with WSL
 
 ---
+
+## Work with MFA & Recovery Token
+
+- For MFA creation, you can use this PowerShell :
+    `
+    $MFASecret = -join ((1..16) | ForEach-Object { "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"[(Get-Random -Maximum 32)] })
+    R2NV4ICF4GM274OU
+    `
+- For Recovery Token, you can use this PowerShell :
+    `
+    New-Guid
+    16173f8b-54de-43c7-8364-da36a11ec8ab
+    `
+  
+--
 
 ## Contributing
 
