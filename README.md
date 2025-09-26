@@ -16,8 +16,8 @@ This advanced PowerShell script automates the customization of Veeam Software Ap
 
 ## What's New (v2.1)
 
-- Fix network issue not applied correctly
-- CFGOnly parameter to create cfg file without iso creation or modification
+- Fix network configuration not applied correctly
+- CFGOnly parameter to create cfg file without iso creation or modification - useful for Packer
 - NodeExporterDNF parameter to install Node Exporter with DNF (require online)
 
 ## What's New (v2.0)
@@ -137,7 +137,11 @@ This advanced PowerShell script automates the customization of Veeam Software Ap
     .\autodeployppxity.ps1 -ConfigFile "production-config.json"
     `
 
-### Legacy Usage (all parameters on command line to override default)
+### Legacy Usage (Parameters on command line to override default)
+
+1. Place the script, ISO in the same directory.
+
+2. Run:
 
     `
     .\autodeployppxity.ps1 `
@@ -156,6 +160,15 @@ This advanced PowerShell script automates the customization of Veeam Software Ap
         -LicenseVBRTune $true `
         -VCSPConnection $true
     `
+
+### Change default value in the script (dirty)
+
+1. You can also edit the script to change all default parameters
+
+2. Place the script, ISO in the same directory.
+
+3. Run: `.\autodeployppxity.ps1` 
+
 
 ---
 
@@ -248,27 +261,35 @@ The script automatically creates systemd services for:
 - **Run custom script** : Exemple PS script run Add Syslog Server
 
 ### VCSP Connection
-- **VCSP Connection**: Veeam Service service provider integration with credential management
+- **VCSP Connection**: Veeam Service service provider integration with credential management & VSPC management agent flag enable
+
+### CFG files Only
+- **CFGOnly** : Useful for Packer deployment, you can set parameters to $true thus the script generate only CFG files and do not edit ISO
 
 ---
 
 ## Troubleshooting
 
 - Ensure WSL is installed and available (`wsl --list --verbose`)
-- Install `xorriso` in WSL (`sudo apt-get install xorriso`)
+- Install `xorriso` in WSL (`sudo apt-get install xorriso`) or update it
 - Confirm ISO file is located in the same directory as the script
-- Use correct JSON structure; command parameters override JSON if specified
+- Use correct JSON structure with all parameters
+- You **cannot override** parameters in CLI if you use JSON
+- If you use optionnal features: check prerequisite and folder structure
+- Use `$CFGOnly=$true` to verify your kickstart file contain all Configurations Blocks
 - Check log file `ISO_Customization.log` for timestamped error messages
+
+### Troubleshooting parameters
 
 #### Network Configuration Validation
 - **IP Format**: Ensure IP addresses match IPv4 format (xxx.xxx.xxx.xxx)
-- **Subnet Masks**: Use standard subnet mask formats
+- **Subnet Masks**: Use standard subnet mask formats (255.255.255.0)
 - **DNS Arrays**: Provide DNS servers as PowerShell arrays: `@("8.8.8.8", "8.8.4.4")`
 
 #### ISO File Access
 - **File Locks**: Ensure ISO files aren't mounted or locked by other applications
 - **Permissions**: Verify read/write access to ISO file location
-- **Path Format**: Use full paths for ISO files in different directories
+- **Path Format**: don't use path, put ISO in the same directory to avoid issue with WSL
 
 ---
 
