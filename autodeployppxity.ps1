@@ -11,7 +11,7 @@ Baptiste TELLIER
 .COPYRIGHT
 Copyright (c) 2025 Baptiste TELLIER
 
-.VERSION 2.0
+.VERSION 2.1
 
 .DESCRIPTION
 This PowerShell script provides automation for customizing Veeam Software Appliance ISO files to enable fully automated, unattended installations. 
@@ -55,6 +55,10 @@ Only effective when InPlace is $true. Default: $true
 .PARAMETER CleanupCFGFiles
 Switch parameter to keep grub.cfg and vbr-ks.cfg for debug
 Default: $true
+
+.PARAMETER CFGOnly
+Switch parameter to only create grub.cfg and vbr-ks.cfg for debug
+Default: $false
 
 .PARAMETER GrubTimeout
 Sets the GRUB bootloader timeout value in seconds. Default: 10
@@ -153,6 +157,10 @@ Default: "time.nist.gov"
 Boolean flag to enable node_exporter deployment. 
 Default: $false
 
+.PARAMETER NodeExporterDNF
+Boolean flag to enable node_exporter deployment using DNF package manager.
+Default: $false
+
 .PARAMETER LicenseVBRTune
 Boolean flag to enable automatic Veeam license installation. Default: $false
 
@@ -163,10 +171,6 @@ Default: $false
 .EXAMPLE
 Using JSON configuration file (Recommended)
 .\autodeployppxity.ps1 -ConfigFile "production-config.json"
-
-.EXAMPLE
-Using JSON configuration with command line overrides
-.\autodeployppxity.ps1 -ConfigFile "base-config.json" -Hostname "custom-hostname" -OutputISO "custom-output.iso"
 
 .EXAMPLE
 Traditional parameter usage (legacy)
@@ -180,7 +184,7 @@ Simple DHCP configuration for lab environment with all optional features disable
 File Name      : autodeployppxity.ps1
 Author         : Baptiste TELLIER (Enhanced by AI Assistant)
 Prerequisite   : PowerShell 5.1+, WSL with xorriso installed
-Version        : 2
+Version        : 2.1
 Creation Date  : 24/09/2025
 
 REQUIREMENTS:
@@ -202,6 +206,8 @@ See example JSON file for proper structure and supported parameters.
 
 OUTPUT:
 - Customized ISO
+- grub.cfg (optional)
+- vbr-ks.cfg (optional)
 - ISO_Customization.log
 
 #>
@@ -215,8 +221,11 @@ param (
     [string]$SourceISO = "VeeamSoftwareAppliance_13.0.0.4967_20250822.iso",
     [string]$OutputISO = "",  # If empty, uses SourceISO name with "_customized" suffix
     [switch]$InPlace = $false,  # Set to $true to modify original ISO
-    [switch]$CreateBackup = $true,  # Create backup when using InPlace
-    [switch]$CleanupCFGFiles = $true, #set to $true to clean CFG file from folder
+    [bool]$CreateBackup = $true,  # Create backup when using InPlace
+
+    ##DEBUG### 
+    [bool]$CleanupCFGFiles = $true, #$true to clean CFG file from folder
+    [bool]$CFGOnly = $false, #no ISO creation - only CFG files in folder. Automatic set $CleanupCFGFiles=$false, $CreateBackup=$false and $InPlace=$true
 
     ##### GRUB Configuration #####
     [int]$GrubTimeout = 10,
@@ -246,7 +255,8 @@ param (
     [string]$NtpRunSync = "false",
 
     ##### optional features #####
-    [bool]$NodeExporter = $false,
+    [bool]$NodeExporter = $false, #node exporter offline from folder
+    [bool]$NodeExporterDNF = $false, #node exporter online with dnf
     [bool]$LicenseVBRTune = $false,
     [string]$LicenseFile = "Veeam-100instances-entplus-monitoring-nfr.lic",
     [string]$SyslogServer = "172.17.53.28",
@@ -343,6 +353,11 @@ function Update-ParametersFromJSON {
     
     if ($Config.PSObject.Properties['CleanupCFGFiles'] -and -not $PSBoundParameters.ContainsKey('CleanupCFGFiles')) {
         $script:CleanupCFGFiles = $Config.CleanupCFGFiles
+        $parametersUpdated++
+    }
+
+    if ($Config.PSObject.Properties['CFGOnly'] -and -not $PSBoundParameters.ContainsKey('CFGOnly')) {
+        $script:CFGOnly = $Config.CFGOnly
         $parametersUpdated++
     }
     
@@ -443,6 +458,11 @@ function Update-ParametersFromJSON {
     
     if ($Config.PSObject.Properties['NodeExporter'] -and -not $PSBoundParameters.ContainsKey('NodeExporter')) {
         $script:NodeExporter = $Config.NodeExporter
+        $parametersUpdated++
+    }
+
+    if ($Config.PSObject.Properties['NodeExporterDNF'] -and -not $PSBoundParameters.ContainsKey('NodeExporterDNF')) {
+        $script:NodeExporterDNF = $Config.NodeExporterDNF
         $parametersUpdated++
     }
     
@@ -584,7 +604,7 @@ function Initialize-ISOOperation {
         TargetISO = $targetISO
         BackupPath = $backupPath
         IsInPlace = $InPlace.IsPresent
-        Mode = if ($InPlace) { "In-Place" } else { "Out-of-Place" }
+        Mode = if ($CFGOnly) {"CFG ONLY"} elseif ($InPlace) { "In-Place" } else { "Out-of-Place" }
     }
 }
 
@@ -661,7 +681,8 @@ function Get-ModificationSummary {
 
     $summary += ""
     $summary += "OPTIONAL FEATURES:"
-    $summary += "  Node Exporter: $(if ($NodeExporter) { 'Enabled' } else { 'Disabled' })"
+    $summary += "  Node Exporter Local: $(if ($NodeExporter) { 'Enabled' } else { 'Disabled' })"
+    $summary += "  Node Exporter Online: $(if ($NodeExporterDNF) { 'Enabled' } else { 'Disabled' })"
     $summary += "  License Auto-Install: $(if ($LicenseVBRTune) { 'Enabled' } else { 'Disabled' })"
     $summary += "  VCSP Connection: $(if ($VCSPConnection) { 'Enabled' } else { 'Disabled' })"
     $summary += "=================================================================================================="
@@ -766,13 +787,15 @@ function Set-NetworkConfiguration {
     }
 
     # Replace existing network line or add new one
+    
     $content = Get-Content $FilePath
     $found = $false
 
     for ($i = 0; $i -lt $content.Count; $i++) {
-        if ($content[$i] -match '^network\\s+') {
+        if ($content[$i] -match '^network\s') {
             $content[$i] = $networkLine
             $found = $true
+            $found
             break
         }
     }
@@ -787,8 +810,8 @@ function Set-NetworkConfiguration {
             }
         }
     }
-
-    Set-Content $FilePath $content
+    
+    Set-Content $FilePath $content 
     Write-Log "Network configuration applied" 'Info'
 }
 
@@ -916,6 +939,27 @@ $VeeamHostConfigBlock = @(
     "log 'Veeam Host Manager configuration completed'"
 )
 
+$NodeExporterDNFBlock = @(
+    "log '[1/4] Enabling Rocky Linux repos and EPEL...'",
+    "rpm -Uvh https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm",
+    "dnf clean all && dnf -y makecache",
+    "dnf -y install dnf-plugins-core || true",
+    "dnf -y config-manager --set-enabled crb || true",
+    "dnf -y install epel-release",
+    "dnf -y makecache",
+
+    "log '[2/4] Installing node_exporter...'",
+    "dnf -y install node_exporter",
+
+    "log '[3/4] Configuring /etc/sysconfig/node_exporter ...'",
+    'bash -c ''echo OPTIONS="--web.listen-address=0.0.0.0:9100" > /etc/sysconfig/node_exporter''',
+
+    "log '[4/4] Enabling and starting node_exporter...'",
+    "systemctl daemon-reload",
+    "systemctl enable node_exporter.service",
+    "log 'node_exporter installation completed'"
+)
+
 #endregion
 
 #region Main Script
@@ -926,7 +970,7 @@ try {
     Start-Transcript -Path $logFile -Append
 
     Write-Log "=================================================================================================="
-    Write-Log "Veeam ISO Customization Script - Version 2.3"
+    Write-Log "Veeam ISO Customization Script - Version 2.1"
     Write-Log "=================================================================================================="
 
     # Load JSON configuration if provided
@@ -937,7 +981,13 @@ try {
     } else {
         Write-Log "Using default parameters (no JSON configuration file specified)" 'Info'
     }
-
+    #if CFG only keep file and don't do iso backup because it won't be edit
+    Write-Log "Config only set to $CFGOnly"
+    if($CFGOnly){
+        $CleanupCFGFiles=$false
+        $InPlace=$true
+        $CreateBackup=$false
+    }
     # Test prerequisites
     if (-not (Test-Prerequisites)) {
         throw "Prerequisites check failed. Please resolve the issues above."
@@ -954,7 +1004,7 @@ try {
 
     # Initialize ISO operation
     $isoInfo = Initialize-ISOOperation
-
+    
     # Show summary and get confirmation
     Write-Host "`n$(Get-ModificationSummary -ISOInfo $isoInfo)" -ForegroundColor Yellow
     Write-Host "`nPress Enter to continue or Ctrl+C to abort..." -ForegroundColor Cyan
@@ -1037,6 +1087,13 @@ try {
         }
     }
 
+    if ($NodeExporterDNF){
+        Write-Log "Adding node_exporter with DNF configuration..." 'Info'
+        Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine 'dnf install -y --nogpgcheck --disablerepo="*" /tmp/static-packages/*.rpm' -NewLines $NodeExporterDNFBlock
+        Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine "/opt/veeam/hostmanager/veeamhostmanager --apply_init_config /etc/veeam/vbr_init.cfg" -NewLines $NodeExporterFirewallBlock
+    }
+
+
     # Normalize line endings
     Write-Log "Normalizing line endings..." 'Info'
     @("vbr-ks.cfg", "grub.cfg") | ForEach-Object {
@@ -1044,7 +1101,8 @@ try {
         $content = $content.Replace("`r`n", "`n")
         Set-Content $_ $content -NoNewline
     }
-
+    
+    if(-not $CFGOnly){
     # Commit changes to ISO
     Write-Log "Committing changes to ISO..." 'Info'
 
@@ -1063,7 +1121,7 @@ try {
 
     # Success
     Write-Log "ISO customization completed successfully!" 'Info'
-
+    }
     Write-Host "`n=================================================================================================="  -ForegroundColor Green
     Write-Host "                                        SUCCESS!"  -ForegroundColor Green
     Write-Host "=================================================================================================="  -ForegroundColor Green
@@ -1083,8 +1141,6 @@ try {
             }
         }
     }
-    Write-Host "`nPress Enter to exit..." -ForegroundColor Cyan
-    Read-Host
 
 } catch {
     Write-Log "Script failed: $($_.Exception.Message)" 'Error'
