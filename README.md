@@ -44,6 +44,13 @@ This advanced PowerShell script automates the customization of Veeam Software Ap
 
 ---
 
+## Disclaimer : Before you edit your ISO
+Installing additional Linux packages, third-party applications, or changing OS settings (other than those that can be controlled via the Veeam Host Management Console) on the Veeam Appliances is not supported. Veeam Customer Support cannot provide technical support for appliances with unsupported modifications due to their unpredictable impact on the appliance's security, stability, and performance.
+
+https://www.veeam.com/kb4772
+
+---
+
 ## Prerequisites
 
 ### System Requirements
