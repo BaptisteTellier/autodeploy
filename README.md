@@ -330,13 +330,21 @@ $CustomVBRBlock = @(
 ## Work with MFA & Recovery Token
 
 - For MFA creation, you can use this PowerShell :
+  
     `
     $MFASecret = -join ((1..16) | ForEach-Object { "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"[(Get-Random -Maximum 32)] })
+    `
+  
+    `
     R2NV4ICF4GM274OU
     `
 - For Recovery Token, you can use this PowerShell :
+  
     `
     New-Guid
+    `
+  
+    `
     16173f8b-54de-43c7-8364-da36a11ec8ab
     `
   
