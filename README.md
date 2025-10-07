@@ -109,7 +109,7 @@ This advanced PowerShell script automates the customization of Veeam Software Ap
       "DNSServers": ["192.168.1.64", "8.8.8.4", "8.8.8.8"],
       "VeeamAdminPassword": "123q123Q123!123",
       "VeeamAdminMfaSecretKey": "JBSWY3DPEHPK3PXP",
-      "VeeamAdminIsMfaEnabled": "false",
+      "VeeamAdminIsMfaEnabled": "true",
       "VeeamSoPassword": "123w123W123!123",
       "VeeamSoMfaSecretKey": "JBSWY3DPEHPK3PXP",
       "VeeamSoIsMfaEnabled": "true",
@@ -232,22 +232,22 @@ This advanced PowerShell script automates the customization of Veeam Software Ap
 
 ### Security Notes
 
-- **Password Requirements**: 
-
+**Password Requirements**
 - The passwords for the veeamadmin and veeamso account must meet the following requirements:
-- 15 characters minimum.
-- 1 upper case character.
-- 1 lower case character.
-- 1 numeric character.
-- 1 special character.
-- No more than 3 characters of the same class in a row. For example, you cannot use more than 3 lowercase or 3 numerical characters in sequence.
-- The passwords for the veeamadmin and veeamso accounts must be different.
-- **NTP Configuration**
+- 15 characters minimum
+- 1 upper case character
+- 1 lower case character
+- 1 numeric character
+- 1 special character
+- No more than 3 characters of the same class in a row. For example, you cannot use more than 3 lowercase or 3 numerical characters in sequence
+- The passwords for the veeamadmin and veeamso accounts must be different
+**NTP Configuration**
 - To avoid timing issues with multifactor authentication, it is recommended to set ntp.runSync=true.
-- **MFA requirements**
+**MFA requirements**
 - The multifactor authentication secret key must be specified as a 16 digit, Base32-encoded string.
 - The recovery token must be specified using hexadecimal values — 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, A, B, C, D, E, F. Note that you can generate an appropriate string with the New-Guid cmdlet in Microsoft PowerShell.
-- **Security Officer Account**: The SO account provides service-level access separate from the administrative account for improved security separation
+**Security Officer Account**
+- The SO account provides service-level access separate from the administrative account for improved security separation
 
 ### Network Security
 - **IP Validation**: Comprehensive IPv4 address format validation using regex patterns
@@ -292,8 +292,6 @@ $CustomVBRBlock = @(
 
 ## Known issues
 - Using static IP doesn't set DNS properly : BUG in VSA, will be fix by Veeam. Workaround : DHCP or Enter Network parameter and Apply
-
----
 
 ## Troubleshooting
 
