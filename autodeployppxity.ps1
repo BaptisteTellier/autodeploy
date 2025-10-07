@@ -30,6 +30,8 @@ Enhanced Features:
 
 The script utilizes WSL (Windows Subsystem for Linux) with xorriso for ISO manipulation.
 
+official Veeam documentation: https://helpcenter.veeam.com/docs/vbr/userguide/deployment_linux_silent_deploy_configure.html?ver=13
+
 .PARAMETER ConfigFile
 Path to JSON configuration file containing all script parameters. When specified, parameters from JSON file take precedence over default values.
 Command line parameters will override JSON values. Example: "production-config.json"

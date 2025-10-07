@@ -187,7 +187,7 @@ This advanced PowerShell script automates the customization of Veeam Software Ap
 | GrubTimeout   | Int    | GRUB timeout (seconds)            | 10                                        | No          |
 | KeyboardLayout| String | Keyboard code                     | fr                                        | No          |
 | Timezone      | String | System timezone                   | Europe/Paris                              | No          |
-| Hostname      | String | Hostname for appliance            | veeam-server                              | No          |
+| Hostname      | String | Hostname for appliance (15char max for Microsoft Domaine)           | veeam-server                              | No          |
 
 ### Network Parameters
 
@@ -232,11 +232,22 @@ This advanced PowerShell script automates the customization of Veeam Software Ap
 
 ### Security Notes
 
-- **Password Requirements**: Both admin and SO passwords should be at least 15 characters long with uppercase, lowercase, numbers, and special characters for enterprise security
-- **MFA Secret Keys**: Must be valid Base32-encoded strings (A-Z, 2-7, no padding) for compatibility with TOTP authenticators like Google Authenticator or Microsoft Authenticator
-- **Recovery Tokens**: Should follow standard GUID format (8-4-4-4-12 hexadecimal digits) for account recovery scenarios
+- **Password Requirements**: 
+
+- The passwords for the veeamadmin and veeamso account must meet the following requirements:
+- 15 characters minimum.
+- 1 upper case character.
+- 1 lower case character.
+- 1 numeric character.
+- 1 special character.
+- No more than 3 characters of the same class in a row. For example, you cannot use more than 3 lowercase or 3 numerical characters in sequence.
+- The passwords for the veeamadmin and veeamso accounts must be different.
+- **NTP Configuration**
+- To avoid timing issues with multifactor authentication, it is recommended to set ntp.runSync=true.
+- **MFA requirements**
+- The multifactor authentication secret key must be specified as a 16 digit, Base32-encoded string.
+- The recovery token must be specified using hexadecimal values — 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, A, B, C, D, E, F. Note that you can generate an appropriate string with the New-Guid cmdlet in Microsoft PowerShell.
 - **Security Officer Account**: The SO account provides service-level access separate from the administrative account for improved security separation
-- **NTP Configuration**: Proper time synchronization is critical for Veeam operations, especially in distributed environments
 
 ### Network Security
 - **IP Validation**: Comprehensive IPv4 address format validation using regex patterns
@@ -279,6 +290,11 @@ $CustomVBRBlock = @(
 
 ---
 
+## Known issues
+- Using static IP doesn't set DNS properly : BUG in VSA, will be fix by Veeam. Workaround : DHCP or Enter Network parameter and Apply
+
+---
+
 ## Troubleshooting
 
 - Ensure WSL is installed and available (`wsl --list --verbose`)
@@ -290,6 +306,7 @@ $CustomVBRBlock = @(
 - Use `$CFGOnly=$true` to verify your kickstart file contain all Configurations Blocks
 - Check log file `ISO_Customization.log` for timestamped error messages
 - to browse ISO with WSL xorriso `wsl xorriso -indev "VeeamSoftwareAppliance_13.0.0.4967_20250822.iso" -ls /`
+- If your specified answers do not meet these requirements, the configuration process will fail. To troubleshoot errors, you can use the Live OS ISO to view the `/var/log/VeeamBackup/veeam_hostmanager/veeamhostmanager.log` file and the system logs files in the `/var/log/anaconda directory.`
 
 ### Troubleshooting parameters
 
@@ -340,6 +357,7 @@ $CustomVBRBlock = @(
 
 ### Documentation Resources
 - [Veeam Backup & Replication Documentation](https://helpcenter.veeam.com/docs/vbr/userguide/overview.html?ver=13)
+- [Veeam Software Appliance Unattended Documentation](https://helpcenter.veeam.com/docs/vbr/userguide/deployment_linux_silent_deploy_configure.html?ver=13)
 - [PowerShell Documentation](https://docs.microsoft.com/en-us/powershell/)
 - [Rocky Linux Kickstart Guide](https://docs.rockylinux.org/guides/automation/kickstart/)
 - [Node Exporter Releases](https://github.com/prometheus/node_exporter/releases)
