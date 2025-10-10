@@ -37,10 +37,10 @@ official Veeam documentation: https://helpcenter.veeam.com/docs/vbr/userguide/de
 
 .PARAMETER ApplianceType
 Specifies the type of Veeam appliance to customize. Valid values: "VSA", "VIA", "VIAVMware", "VIAHR"
-- VSA: Traditional Veeam Backup & Replication appliance (default behavior)
-- VIA: Veeam Infrastructure Appliance
+- VSA: Veeam Software appliance (default behavior)
+- VIA: Veeam Infrastructure Appliance (JeOS - Proxy)
 - VIAVMware: Veeam Infrastructure Appliance (with iSCSI & NVMe/TCP)
-- VIAHR: Veeam Hardened Repository
+- VIAHR: Veeam Hardened Repository (JeOS - Hardened Repository)
 Default: "VSA"
 
 .PARAMETER ConfigFile
@@ -1541,19 +1541,19 @@ try {
     switch ($ApplianceType) {
         "VSA" {
             Write-Log "Invoking VSA (Veeam Software Appliance) workflow..." 'Info'
-            Invoke-VSA
+            $resultISO = Invoke-VSA
         }
         "VIA" {
             Write-Log "Invoking Veeam Infrastructure Appliance workflow..." 'Info'
-            Invoke-VIA
+            $resultISO = Invoke-VIA
         }
         "VIAVMware" {
             Write-Log "Invoking Veeam Infrastructure Appliance (with iSCSI & NVMe/TCP) workflow..." 'Info'
-            Invoke-VIAVMware
+            $resultISO = Invoke-VIAVMware
         }
         "VIAHR" {
             Write-Log "Invoking Veeam Hardened Repository workflow..." 'Info'
-            Invoke-VIAHR
+            $resultISO = Invoke-VIAHR
         }
         default {
             throw "Invalid ApplianceType: $ApplianceType. Valid values are 'VSA', 'VIA', 'VIAVMware', or 'VIAHR'."

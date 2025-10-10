@@ -6,7 +6,7 @@
   "CreateBackup": true,
   "CleanupCFGFiles": true,
   "CFGOnly": false,
-  "GrubTimeout": 15,
+  "GrubTimeout": 0,
   "KeyboardLayout": "fr",
   "Timezone": "Europe/Paris",
   "Hostname": "veeam-backup",
