@@ -9,14 +9,18 @@
 
 ## Overview
 
-This advanced PowerShell script automates the customization of Veeam Software Appliance ISO files, enabling fully automated, unattended appliance deployments with enterprise-grade, reusable configurations. It supports JSON configuration loading, out-of-place ISO modification, path-safe working in the current directory, advanced logging, and optional backup creation. Network, security, and monitoring details can be configured to fit enterprise environments.
+This advanced PowerShell script automates the customization of Veeam Software Appliance ISO files, enabling fully automated, unattended appliance deployments with enterprise-grade, reusable configurations. It supports JSON configuration loading, out-of-place ISO modification, advanced logging, and optional backup creation. Network, security, and monitoring details can be configured to fit enterprise environments.
 
 ---
+
+## What's New (v2.2)
+
+- Now support Veeam Infrastructure Appliance (JeOS) - Proxy / VMware Proxy / Hardened Repository
 
 ## What's New (v2.1)
 
 - Fix network configuration not applied correctly
-- CFGOnly parameter to create cfg file without iso creation or modification - useful for Packer
+- CFGOnly parameter to create cfg file without iso creation or modification - useful for Packer or Cloud init
 - NodeExporterDNF parameter to install Node Exporter with DNF (require online)
 
 ## What's New (v2.0)
@@ -32,6 +36,7 @@ This advanced PowerShell script automates the customization of Veeam Software Ap
 ## Features
 
 - Load configuration from JSON for reproducible deployments
+- APPLIANCE TYPE SELECTION: Support for VSA, VIA, VIAVMware, and VIAHR appliances with dedicated deployment workflows
 - Modify ISO files (create custom copies or modify in place)
 - Automated GRUB and Kickstart configuration injection
 - DHCP and static IP support, validated in script
@@ -78,6 +83,7 @@ https://www.veeam.com/kb4772
     `
     wsl --version
     `
+
 ### Optionnal Dependencies
 **License file**
 - 'license' folder at / of the folder where you run the script
@@ -88,6 +94,7 @@ https://www.veeam.com/kb4772
 - `LICENSE + node_exporter + NOTICE` inside the folder
 - where `node_exporter` is the uncompressed binary downloaded from offical repo
 - Warning : “fapolicyd” disallow execution of random binary – might not work in the future. Need to add node_exporter repository and rpm file installation instead
+- Might not work on VIA - Hardened Repository
 
 ---
 
@@ -101,6 +108,7 @@ https://www.veeam.com/kb4772
     {
       "SourceISO": "VeeamSoftwareAppliance_13.0.0.4967_20250822.iso",
       "OutputISO": "",
+      "ApplianceType": "VSA",
       "InPlace": false,
       "CreateBackup": true,
       "CleanupCFGFiles": false,
@@ -140,7 +148,7 @@ https://www.veeam.com/kb4772
 
 3. Run:
     `
-    .\autodeployppxity.ps1 -ConfigFile "production-config.json"
+    .\autodeploy.ps1 -ConfigFile "production-config.json"
     `
 
 ### Legacy Usage (Parameters on command line to override default)
@@ -150,7 +158,7 @@ https://www.veeam.com/kb4772
 2. Run:
 
     ```
-    .\autodeployppxity.ps1 `
+    .\autodeploy.ps1 `
         -SourceISO "VeeamSoftwareAppliance_13.0.0.4967_20250822.iso" `
         -GrubTimeout 45 `
         -KeyboardLayout "us" `
@@ -173,7 +181,7 @@ https://www.veeam.com/kb4772
 
 2. Place the script, ISO in the same directory.
 
-3. Run: `.\autodeployppxity.ps1` 
+3. Run: `.\autodeploy.ps1` 
 
 
 ---
@@ -187,6 +195,7 @@ https://www.veeam.com/kb4772
 | ConfigFile    | String | Path to JSON file                 | ""                                        | No          |
 | SourceISO     | String | Source ISO filename (required)    | VeeamSoftwareAppliance_13.0.0.4967_20250822.iso | Yes         |
 | OutputISO     | String | Customized ISO filename           | auto (adds _customized)                   | No          |
+| ApplianceType    | String | VSA, VIA, VIAVMware, and VIAHR               | VSA                                      | No          |
 | InPlace       | Bool   | Modify original ISO directly      | false                                     | No          |
 | CreateBackup  | Bool   | Create backup for InPlace changes | true                                      | No          |
 | CleanupCFGFiles| Bool  | Clean temp config files           | true                                      | No          |
@@ -227,12 +236,12 @@ https://www.veeam.com/kb4772
 |---------------------|---------|----------------------------------|-------------------------------------------|
 | NodeExporter        | Bool    | Deploy Prometheus node_exporter Local folder required | false                                     |
 | NodeExporterDNF     | Bool    | Deploy Prometheus node_exporter Online required | false                                     |
-| LicenseVBRTune      | Bool    | Auto-install Veeam license       | false                                     |
+| LicenseVBRTune      | Bool    | Auto-install Veeam license (only VSA) | false                                     |
 | LicenseFile         | String  | License filename                 | Veeam-100instances-entplus-monitoring-nfr.lic |
 | SyslogServer        | String  | Syslog server IP                 | 172.17.53.28                              |
-| VCSPConnection      | Bool    | Connect to VCSP                  | false                                     |
+| VCSPConnection      | Bool    | Connect to VCSP  (only VSA)      | false                                     |
 | VCSPUrl             | String  | VCSP server URL                  | ""                                        |
-| VCSPLogin           | String  | VCSP login                       | ""                                        |
+| VCSPLogin           | String  | VCSP login                      | ""                                        |
 | VCSPPassword        | String  | VCSP password                    | ""                                        |
 
 ---
@@ -304,6 +313,7 @@ $CustomVBRBlock = @(
 
 - Ensure WSL is installed and available (`wsl --list --verbose`)
 - Install `xorriso` in WSL (`sudo apt-get install xorriso`) or update it
+- If you just installed WSL, you might have permission issue, reboot Windows
 - Confirm ISO file is located in the same directory as the script
 - Use correct JSON structure with all parameters
 - You **cannot override** parameters in CLI if you use JSON
@@ -362,7 +372,7 @@ $CustomVBRBlock = @(
 - [x] Parameters to change Hostname ✅ **Completed**
 - [x] Function to change IP / DHCP ✅ **Completed**
 - [ ] Move away from WSL and perhaps use oscdimg.exe ?
-- [ ] Support for multiple ISO formats (JEoS & VSA)
+- [x] Support for multiple ISO formats (JEoS & VSA)
 - [x] Automated backup creation before modification ✅ **Completed**
 - [x] Support for JSON configuration file ✅ **Completed**
 
@@ -379,8 +389,8 @@ $CustomVBRBlock = @(
 ## Author & Stats
 
 **Author**: Baptiste TELLIER  
-**Version**: 2.1  
-**Creation**: September 26, 2025
+**Version**: 2.2  
+**Creation**: Octobre 10, 2025
 
 ![GitHub stars](https://img.shields.io/github/stars/PleXi00/autodeploy)
 ![GitHub forks](https://img.shields.io/github/forks/PleXi00/autodeploy)

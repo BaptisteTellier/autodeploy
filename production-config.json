@@ -1,6 +1,7 @@
 {
   "SourceISO": "VeeamSoftwareAppliance_13.0.0.4967_20250822.iso",
   "OutputISO": "",
+  "ApplianceType": "VSA",
   "InPlace": false,
   "CreateBackup": true,
   "CleanupCFGFiles": true,
