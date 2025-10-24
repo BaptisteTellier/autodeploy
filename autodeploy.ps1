@@ -11,7 +11,7 @@ Baptiste TELLIER
 .COPYRIGHT
 Copyright (c) 2025 Baptiste TELLIER
 
-.VERSION 2.2
+.VERSION 2.3
 
 .DESCRIPTION
 This PowerShell script provides automation for customizing Veeam Appliance ISO files to enable fully automated, unattended installations.
@@ -281,7 +281,8 @@ param (
     [bool]$VCSPConnection = $false,
     [string]$VCSPUrl = "192.168.1.202",
     [string]$VCSPLogin = "v13",
-    [string]$VCSPPassword = "Azerty123!"
+    [string]$VCSPPassword = "Azerty123!",
+    [bool]$RestoreConfig = $false
 )
 #endregion
 
@@ -512,6 +513,11 @@ function Update-ParametersFromJSON {
         $script:VCSPPassword = $Config.VCSPPassword
         $parametersUpdated++
     }
+
+    if ($Config.PSObject.Properties['RestoreConfig'] -and -not $PSBoundParameters.ContainsKey('RestoreConfig')) {
+        $script:RestoreConfig = $Config.RestoreConfig
+        $parametersUpdated++
+    }
     
     Write-Log "Applied $parametersUpdated parameters from JSON configuration" 'Info'
 }
@@ -600,6 +606,7 @@ function Initialize-ISOOperation {
         BackupPath = $backupPath
         IsInPlace = $InPlace.IsPresent
         Mode = if ($CFGOnly) {"CFG ONLY"} elseif ($InPlace) { "In-Place" } else { "Out-of-Place" }
+        RestoreConfig = $RestoreConfig
     }
 }
 
@@ -672,6 +679,7 @@ function Get-ModificationSummary {
     if($ApplianceType -eq "VSA"){
     $summary += "  License Auto-Install: $(if ($LicenseVBRTune) { 'Enabled' } else { 'Disabled' })"
     $summary += "  VCSP Connection: $(if ($VCSPConnection) { 'Enabled' } else { 'Disabled' })"
+    $summary += "  Restore Config: $(if ($ISOInfo.RestoreConfig) { 'Enabled' } else { 'Disabled' })"
     }
     $summary += "=================================================================================================="
 
@@ -950,6 +958,33 @@ function Get-NodeExporterDNFBlock {
     )
 }
 
+function Get-RestoreConfigStart {
+    return @(
+        "log 'Start Restore Process'",
+        "sleep 5m",
+        "dotnet /opt/veeam/vbr/Veeam.Backup.Configuration.UnattendedRestore.dll /file:/var/lib/veeam/unattended.xml",
+        "log 'Restore Process Completed'"
+    )
+}
+
+function Get-RestoreFile {
+    return @(
+        "# Copy Restore configuration file",
+        "log 'starting restore configuration file copy'",
+        "cp -f /mnt/install/repo/conf/conftoresto.bco /mnt/sysimage/var/lib/veeam/backup/conftoresto.bco",
+        "chmod 600 /mnt/sysimage/var/lib/veeam/backup/conftoresto.bco",
+        "chown root:root /mnt/sysimage/var/lib/veeam/backup/conftoresto.bco",
+        "log 'restore configuration file copy completed'"
+        
+        "# Copy unattended.xml file",
+        "log 'starting unattended.xml file copy'",
+        "cp -f /mnt/install/repo/conf/unattended.xml /mnt/sysimage/var/lib/veeam/unattended.xml",
+        "chmod 600 /mnt/sysimage/var/lib/veeam/unattended.xml",
+        "chown root:root /mnt/sysimage/var/lib/veeam/unattended.xml",
+        "log 'unattended.xml file copy completed'"
+    )
+}
+
 #endregion
 
 #region VSA Region Function
@@ -1024,6 +1059,17 @@ function Invoke-VSA {
 
     Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine 'find /etc/yum.repos.d/ -type f -not -name "*veeam*" -delete' -NewLines (Get-VeeamHostConfigBlock)
 
+        if ($RestoreConfig) {
+        Write-Log "Adding restore configuration..." 'Info'
+        Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine "/usr/bin/cp -rv /tmp/*.* /mnt/sysimage/var/log/appliance-installation-logs/" -NewLines (Get-RestoreFile)
+        Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine "/opt/veeam/hostmanager/veeamhostmanager --apply_init_config /etc/veeam/vbr_init.cfg" -NewLines (Get-RestoreConfigStart)
+
+        if (Test-Path "conf") {
+            $confCmd = "wsl xorriso -boot_image any keep -dev `"$($isoInfo.TargetISO)`" -map conf /conf"
+            Invoke-WSLCommand -Command $confCmd -Description "Add conf folder to ISO" | Out-Null
+        }
+    }
+
     if ($LicenseVBRTune) {
         Write-Log "Adding license configuration..." 'Info'
         Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine "/opt/veeam/hostmanager/veeamhostmanager --apply_init_config /etc/veeam/vbr_init.cfg" -NewLines (Get-CustomVBRBlock)
@@ -1057,6 +1103,8 @@ function Invoke-VSA {
         Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine 'dnf install -y --nogpgcheck --disablerepo="*" /tmp/static-packages/*.rpm' -NewLines (Get-NodeExporterDNFBlock)
         Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine "/opt/veeam/hostmanager/veeamhostmanager --apply_init_config /etc/veeam/vbr_init.cfg" -NewLines (Get-NodeExporterFirewallBlock)
     }
+
+
 
     Write-Log "Normalizing line endings..." 'Info'
     @("vbr-ks.cfg", "grub.cfg") | ForEach-Object {

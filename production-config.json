@@ -33,5 +33,6 @@
   "VCSPConnection": false,
   "VCSPUrl": "",
   "VCSPLogin": "",
-  "VCSPPassword": ""
+  "VCSPPassword": "",
+  "RestoreConfig": true
 }
