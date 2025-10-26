@@ -116,41 +116,43 @@ https://www.veeam.com/kb4772
 
     ```
     {
-      "SourceISO": "VeeamSoftwareAppliance_13.0.0.4967_20250822.iso",
-      "OutputISO": "",
-      "ApplianceType": "VSA",
-      "InPlace": false,
-      "CreateBackup": true,
-      "CleanupCFGFiles": false,
-      "CFGOnly": false,
-      "GrubTimeout": 15,
-      "KeyboardLayout": "fr",
-      "Timezone": "Europe/Paris",
-      "Hostname": "veeam-backup",
-      "UseDHCP": false,
-      "StaticIP": "192.168.1.166",
-      "Subnet": "255.255.255.0",
-      "Gateway": "192.168.1.1",
-      "DNSServers": ["192.168.1.64", "8.8.8.4", "8.8.8.8"],
-      "VeeamAdminPassword": "123q123Q123!123",
-      "VeeamAdminMfaSecretKey": "JBSWY3DPEHPK3PXP",
-      "VeeamAdminIsMfaEnabled": "true",
-      "VeeamSoPassword": "123w123W123!123",
-      "VeeamSoMfaSecretKey": "JBSWY3DPEHPK3PXP",
-      "VeeamSoIsMfaEnabled": "true",
-      "VeeamSoRecoveryToken": "12345678-90ab-cdef-1234-567890abcdef",
-      "VeeamSoIsEnabled": "true",
-      "NtpServer": "time.nist.gov",
-      "NtpRunSync": "true",
-      "NodeExporter": false,
-      "NodeExporterDNF": false,
-      "LicenseVBRTune": false,
-      "LicenseFile": "Veeam-100instances-entplus-monitoring-nfr.lic",
-      "SyslogServer": "172.17.53.28",
-      "VCSPConnection": false,
-      "VCSPUrl": "",
-      "VCSPLogin": "",
-      "VCSPPassword": ""
+    "SourceISO": "VeeamSoftwareAppliance_13.0.0.4967_20250822.iso",
+    "OutputISO": "",
+    "ApplianceType": "VSA",
+    "InPlace": false,
+    "CreateBackup": true,
+    "CleanupCFGFiles": true,
+    "CFGOnly": false,
+    "GrubTimeout": 0,
+    "KeyboardLayout": "fr",
+    "Timezone": "Europe/Paris",
+    "Hostname": "veeam-backup",
+    "UseDHCP": false,
+    "StaticIP": "192.168.1.166",
+    "Subnet": "255.255.255.0",
+    "Gateway": "192.168.1.1",
+    "DNSServers": ["192.168.1.64", "8.8.8.4", "8.8.8.8"],
+    "VeeamAdminPassword": "123q123Q123!123",
+    "VeeamAdminMfaSecretKey": "JBSWY3DPEHPK3PXP",
+    "VeeamAdminIsMfaEnabled": "true",
+    "VeeamSoPassword": "123w123W123!123",
+    "VeeamSoMfaSecretKey": "JBSWY3DPEHPK3PXP",
+    "VeeamSoIsMfaEnabled": "true",
+    "VeeamSoRecoveryToken": "12345678-90ab-cdef-1234-567890abcdef",
+    "VeeamSoIsEnabled": "true",
+    "NtpServer": "time.nist.gov",
+    "NtpRunSync": "true",
+    "NodeExporter": false,
+    "NodeExporterDNF": false,
+    "LicenseVBRTune": false,
+    "LicenseFile": "Veeam-100instances-entplus-monitoring-nfr.lic",
+    "SyslogServer": "",
+    "VCSPConnection": false,
+    "VCSPUrl": "",
+    "VCSPLogin": "",
+    "VCSPPassword": "",
+    "RestoreConfig": false,
+    "ConfigPasswordSo": ""
     }
     ```
 
@@ -311,7 +313,7 @@ $CustomVBRBlock = @(
 ### Booting ISO
 - If your specified answers do not meet these requirements, the configuration process will fail. To troubleshoot errors, you can use the Live OS ISO to view the `/var/log/VeeamBackup/veeam_hostmanager/veeamhostmanager.log` file and the system logs files in the `/var/log/anaconda directory.`
 - Post-install log and Veeam init are stored here : `/var/log/appliance-installation-logs/post-install.log` & `/var/log/veeam_init.log`
-- Unattended Configuration Restore are stored here : wrong SOPassword & TOTP : `/var/log/veeam_addsoconfpw.log` & wrong unattended config password or fail restore : `/var/log/veeam_configrestore.log`
+- Unattended Configuration Restore are stored here : wrong SO Password & TOTP : `/var/log/veeam_addsoconfpw.log` & wrong unattended config password or fail restore : `/var/log/veeam_configrestore.log`
 
 ### Troubleshooting parameters
 

@@ -29,11 +29,11 @@
   "NodeExporterDNF": false,
   "LicenseVBRTune": false,
   "LicenseFile": "Veeam-100instances-entplus-monitoring-nfr.lic",
-  "SyslogServer": "172.17.53.28",
+  "SyslogServer": "",
   "VCSPConnection": false,
   "VCSPUrl": "",
   "VCSPLogin": "",
   "VCSPPassword": "",
-  "RestoreConfig": true,
-  "ConfigPasswordSo": "123p123P123!123"
+  "RestoreConfig": false,
+  "ConfigPasswordSo": ""
 }
