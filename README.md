@@ -93,6 +93,7 @@ https://www.veeam.com/kb4772
 **License file**
 - `license` folder at / of the folder where you run the script
 - `xxx.lic` file inside the folder and `xxx.lic` for the lic parameter
+- `LicenseVBRTune` set to `$true`
 
 **node_exporter**
 - `node_exporter` folder at / of the folder where you run the script
@@ -102,6 +103,7 @@ https://www.veeam.com/kb4772
 - Might not work on VIA - Hardened Repository
 
 **Configuration Restore**
+- Requires license optionnal parameters `LicenseVBRTune` & `LicenseFile`
 - Requires `conf` folder with `unattended.xml`, `veeam_addsoconfpw.sh` and your bco name `conftoresto.bco`
 - Edit `unattended.xml` with your configuration password at BACKUP_PASSWORD. **It's the password for your bco you set in VBR console.**
 - Set JSON `RestoreConfig` to true and edit with your `ConfigPasswordSo`. **It's the password you set as Security Officer.**
@@ -287,8 +289,10 @@ $CustomVBRBlock = @(
 
 ### Automatique Unattended Restore
 - Only tested with Security Officer and MFA enabled
+- Requires `LicenseVBRTune` and `LicenseFile`
+- Not tested with other optionnals features
 - How unattended.xml works : https://helpcenter.veeam.com/docs/vbr/userguide/restore_vbr_linux_edit.html?ver=13
-- find log - Password SO config: /var/log/veeam_addsoconfpw.log & Config restore: /var/log/veeam_configrestore.log"
+- find log - Password SO config: `/var/log/veeam_addsoconfpw.log` & Config restore: `/var/log/veeam_configrestore.log`
 
 ---
 
@@ -298,7 +302,8 @@ $CustomVBRBlock = @(
 
 ## Troubleshooting
 
-### making ISO
+### Making ISO
+- If you just installed WSL, you need to reboot
 - Ensure WSL is installed and available (`wsl --list --verbose`)
 - Install `xorriso` in WSL (`sudo apt-get install xorriso`) or update it
 - If you just installed WSL, you might have permission issue, reboot Windows
@@ -363,10 +368,10 @@ $CustomVBRBlock = @(
 
 - [x] Parameters to change Hostname ✅ **Completed**
 - [x] Function to change IP / DHCP ✅ **Completed**
-- [ ] Move away from WSL and perhaps use oscdimg.exe ?
-- [x] Support for multiple ISO formats (JEoS & VSA)
+- [x] Support for multiple ISO formats (JEoS & VSA) ✅ **Completed**
 - [x] Automated backup creation before modification ✅ **Completed**
 - [x] Support for JSON configuration file ✅ **Completed**
+- [x] Automated Restore Configuration ✅ **Completed**
 
 ## Support
 
