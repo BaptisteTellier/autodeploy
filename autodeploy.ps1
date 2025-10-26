@@ -177,21 +177,24 @@ Default: $false
 .PARAMETER LicenseVBRTune
 Boolean flag to enable automatic Veeam license installation. Default: $false
 
+.PARAMETER SyslogServer
+Syslog server IP address.
+Default: ""
+
 .PARAMETER VCSPConnection
 Boolean flag to enable VCSP connection. 
 Default: $false
 
+.PARAMETER RestoreConfig
+Boolean flag to enable restoration of the configuration from backup.
+Default: $false
+
+.PARAMETER ConfigPasswordSo
+Security Officer Configuration Password for decrypting the configuration backup during restore.
+
 .EXAMPLE
 Using JSON configuration file with VSA appliance (Recommended)
-.\autodeploy.ps1 -ConfigFile "production-config.json" -ApplianceType "VSA"
-
-.EXAMPLE
-Using JSON configuration file with VIA appliance
-.\autodeploy.ps1 -ConfigFile "via-config.json" -ApplianceType "VIA"
-
-.EXAMPLE
-Traditional parameter usage for VSA (legacy)
-.\autodeploy.ps1 -ApplianceType "VSA" -SourceISO "VeeamSoftwareAppliance_13.0.0.4967_20250822.iso" -GrubTimeout 45 -KeyboardLayout "us" -Timezone "America/New_York" -Hostname "veeam-backup-prod01" -UseDHCP:$false -StaticIP "10.50.100.150" -Subnet "255.255.255.0" -Gateway "10.50.100.1" -DNSServers @("10.50.1.10", "10.50.1.11", "8.8.8.8") -VeeamAdminPassword "P@ssw0rd2024!123" -NodeExporter $true -LicenseVBRTune $true -VCSPConnection $true
+.\autodeploy.ps1 -ConfigFile "production-config.json"
 
 .NOTES
 File Name      : autodeploy.ps1
@@ -199,7 +202,7 @@ Author         : Baptiste TELLIER
 Prerequisite   : PowerShell 5.1+, WSL with xorriso installed
 Version        : 2.3
 Creation Date  : 24/09/2025
-Last Modified  : 10/10/2025
+Last Modified  : 26/10/2025
 
 REQUIREMENTS:
 - Windows Subsystem for Linux (WSL) with xorriso package installed
@@ -270,19 +273,20 @@ param (
     [string]$VeeamSoRecoveryToken = "eb9fcbf4-2be6-e94d-4203-dded67c5a450",
     [string]$VeeamSoIsEnabled = "true",
     [string]$NtpServer = "time.nist.gov",
-    [string]$NtpRunSync = "false",
+    [string]$NtpRunSync = "true",
 
     ##### optional features #####
     [bool]$NodeExporter = $false,
     [bool]$NodeExporterDNF = $false,
     [bool]$LicenseVBRTune = $false,
     [string]$LicenseFile = "Veeam-100instances-entplus-monitoring-nfr.lic",
-    [string]$SyslogServer = "172.17.53.28",
+    [string]$SyslogServer = "",
     [bool]$VCSPConnection = $false,
-    [string]$VCSPUrl = "192.168.1.202",
-    [string]$VCSPLogin = "v13",
-    [string]$VCSPPassword = "Azerty123!",
-    [bool]$RestoreConfig = $false
+    [string]$VCSPUrl = "",
+    [string]$VCSPLogin = "",
+    [string]$VCSPPassword = "",
+    [bool]$RestoreConfig = $false,
+    [string]$ConfigPasswordSo = ""
 )
 #endregion
 
@@ -516,6 +520,11 @@ function Update-ParametersFromJSON {
 
     if ($Config.PSObject.Properties['RestoreConfig'] -and -not $PSBoundParameters.ContainsKey('RestoreConfig')) {
         $script:RestoreConfig = $Config.RestoreConfig
+        $parametersUpdated++
+    }
+    
+    if ($Config.PSObject.Properties['ConfigPasswordSo'] -and -not $PSBoundParameters.ContainsKey('ConfigPasswordSo')) {
+        $script:ConfigPasswordSo = $Config.ConfigPasswordSo
         $parametersUpdated++
     }
     
@@ -802,14 +811,21 @@ function Set-NetworkConfiguration {
 #region Dynamic Configuration Block Functions
 
 function Get-CustomVBRBlock {
-    return @(
-        "# Custom VBR config",
+    $block = @(
+        "echo 'Applying license file...'",
         "pwsh -Command '",
         "Import-Module /opt/veeam/powershell/Veeam.Backup.PowerShell/Veeam.Backup.PowerShell.psd1",
-        "Install-VBRLicense -Path /etc/veeam/license/$LicenseFile",
-        "Add-VBRSyslogServer -ServerHost '$SyslogServer' -Port 514 -Protocol Udp",
-        "'"
+        "Install-VBRLicense -Path /etc/veeam/license/$LicenseFile"
     )
+    
+    # Ajouter la ligne syslog seulement si SyslogServer a une valeur
+    if ($SyslogServer) {
+        $block += "Set-VBRServerSyslog -SyslogServer '$SyslogServer' -SyslogPort 514 -Protocol UDP"
+    }
+    $block += "echo 'License file applied successfully'"
+    $block += "'"
+    
+    return $block
 }
 
 function Get-CustomVCSPBlock {
@@ -912,13 +928,26 @@ function Get-VeeamHostConfigBlock {
         "###############################################################################",
         "#  Automatic Host Manager configuration TRIGGER AFTER REBOOT",
         "###############################################################################",
+        "log 'starting /etc/veeam/veeam-init.sh'",
         "cat << EOF >> /etc/veeam/veeam-init.sh",
         "#!/bin/bash",
         "set -eE -u -o pipefail",
+        "# Configuration logging",
+        "exec > >(tee -a '/var/log/veeam_init.log') 2>&1",
+        "echo 'Applying initial Veeam configuration...'",
         "/opt/veeam/hostmanager/veeamhostmanager --apply_init_config /etc/veeam/vbr_init.cfg",
+        "echo 'Disabling veeam-init service...'",
         "systemctl disable veeam-init",
+        "echo 'OK : Service disabled'",
+        "echo '==========================================='",
+        "echo 'Veeam VSA Initialization Completed Successfully'",
+        "echo '==========================================='",
+        "echo 'All logs consolidated in: /var/log/veeam_init.log'",
+        "echo '==========================================='",
         "EOF",
+        "log 'end of /etc/veeam/veeam-init.sh'",
         "chmod +x /etc/veeam/veeam-init.sh",
+        "log 'creation of /etc/systemd/system/veeam-init.service'",
         "# Create systemd service",
         "cat << EOF >> /etc/systemd/system/veeam-init.service",
         "[Unit]",
@@ -931,7 +960,8 @@ function Get-VeeamHostConfigBlock {
         "WantedBy=multi-user.target",
         "EOF",
         "systemctl enable veeam-init.service",
-        "log 'Veeam Host Manager configuration completed'"
+        "log 'Veeam Host Manager configuration completed'",
+        "log 'end of log /var/log/appliance-installation-logs/post-install.log'"
     )
 }
 
@@ -958,16 +988,43 @@ function Get-NodeExporterDNFBlock {
     )
 }
 
-function Get-RestoreConfigStart {
+function Get-InstalloathtoolBlock {
     return @(
-        "log 'Start Restore Process'",
-        "sleep 5m",
-        "dotnet /opt/veeam/vbr/Veeam.Backup.Configuration.UnattendedRestore.dll /file:/var/lib/veeam/unattended.xml",
-        "log 'Restore Process Completed'"
+        "log '[1/2] Enabling Rocky Linux repos and EPEL...'",
+        "rpm -Uvh https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm",
+        "dnf clean all && dnf -y makecache",
+        "log '[2/2] Installing oathtool and curl...'",
+        "dnf -y install oathtool",
+        "dnf -y install curl",
+        "log 'oathtool and curl installation completed'"
     )
 }
 
-function Get-RestoreFile {
+function Get-VeeamRestoreConfigBlock {
+   
+    return @(
+        "sleep 10s",
+        "echo 'Configuring SO backup password'",
+        "chmod +x '/etc/veeam/veeam_addsoconfpw.sh'",
+        "/bin/bash /etc/veeam/veeam_addsoconfpw.sh '$script:ConfigPasswordSo' '$script:VeeamSoMfaSecretKey' '$script:VeeamSoPassword'",
+        "echo 'OK : Configuration SO password set'",
+        "sleep 10s",
+        "echo 'Restoring configuration...'",
+        "dotnet /opt/veeam/vbr/Veeam.Backup.Configuration.UnattendedRestore.dll /file:/var/lib/veeam/unattended.xml 2>&1 | tee -a /var/log/veeam_configrestore.log",
+        "echo 'OK : Configuration restored'",
+        "echo 'Additional logs:'",
+        "echo '  - Password SO config: /var/log/veeam_addsoconfpw.log'",
+        "echo '  - Config restore: /var/log/veeam_configrestore.log'",
+        "echo 'Cleaning up oathtool curl and rm unattended.xml veeam_addsoconfpw.sh ...'",
+        "dnf -y remove oathtool curl",
+        "rm -f /var/lib/veeam/unattended.xml",
+        "rm -f /etc/veeam/veeam_addsoconfpw.sh"
+        )
+        #need remove own script after run and uninstall oathtool and curl and unattended.xml
+}
+
+
+function Get-RestoreFileCopyBlock {
     return @(
         "# Copy Restore configuration file",
         "log 'starting restore configuration file copy'",
@@ -982,6 +1039,13 @@ function Get-RestoreFile {
         "chmod 600 /mnt/sysimage/var/lib/veeam/unattended.xml",
         "chown root:root /mnt/sysimage/var/lib/veeam/unattended.xml",
         "log 'unattended.xml file copy completed'"
+
+        "# Copy veeam_addsoconfpw.sh file",
+        "log 'starting veeam_addsoconfpw.sh file copy'",
+        "cp -f /mnt/install/repo/conf/veeam_addsoconfpw.sh /mnt/sysimage/etc/veeam/veeam_addsoconfpw.sh",
+        "chmod 600 /mnt/sysimage/etc/veeam/veeam_addsoconfpw.sh",
+        "chown root:root /mnt/sysimage/etc/veeam/veeam_addsoconfpw.sh",
+        "log 'veeam_addsoconfpw.sh file copy completed'"
     )
 }
 
@@ -1061,8 +1125,9 @@ function Invoke-VSA {
 
         if ($RestoreConfig) {
         Write-Log "Adding restore configuration..." 'Info'
-        Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine "/usr/bin/cp -rv /tmp/*.* /mnt/sysimage/var/log/appliance-installation-logs/" -NewLines (Get-RestoreFile)
-        Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine "/opt/veeam/hostmanager/veeamhostmanager --apply_init_config /etc/veeam/vbr_init.cfg" -NewLines (Get-RestoreConfigStart)
+        Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine "/usr/bin/cp -rv /tmp/*.* /mnt/sysimage/var/log/appliance-installation-logs/" -NewLines (Get-RestoreFileCopyBlock)
+        Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine "/opt/veeam/hostmanager/veeamhostmanager --apply_init_config /etc/veeam/vbr_init.cfg" -NewLines (Get-VeeamRestoreConfigBlock)
+        Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine 'dnf install -y --nogpgcheck --disablerepo="*" /tmp/static-packages/*.rpm' -NewLines (Get-InstalloathtoolBlock)
 
         if (Test-Path "conf") {
             $confCmd = "wsl xorriso -boot_image any keep -dev `"$($isoInfo.TargetISO)`" -map conf /conf"

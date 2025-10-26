@@ -9,9 +9,14 @@
 
 ## Overview
 
-This advanced PowerShell script automates the customization of Veeam Software Appliance ISO files, enabling fully automated, unattended appliance deployments with enterprise-grade, reusable configurations. It supports JSON configuration loading, out-of-place ISO modification, advanced logging, and optional backup creation. Network, security, and monitoring details can be configured to fit enterprise environments.
+This advanced PowerShell script automates the customization of Veeam Software Appliance ISO files, enabling fully automated, unattended appliance deployments with enterprise-grade, reusable configurations. It supports JSON configuration loading, out-of-place ISO modification, advanced logging, and optional IS backup creation. Network, security, and monitoring details can be configured to fit enterprise environments.
 
 ---
+
+## What's New (v2.3) : BIG UPDATE
+
+- Support for Automatique unattended configuration restore
+- Improved log inside VSA
 
 ## What's New (v2.2)
 
@@ -29,7 +34,6 @@ This advanced PowerShell script automates the customization of Veeam Software Ap
 - Out-of-place ISO customization by default
 - Optional backup creation for in-place editing
 - Improved script logging and in VSA logging
-- Legacy and command-line overrides still supported
 
 ---
 
@@ -42,9 +46,10 @@ This advanced PowerShell script automates the customization of Veeam Software Ap
 - DHCP and static IP support, validated in script
 - Regional keyboard & timezone settings
 - Secure password and MFA configuration for Veeam accounts
-- Prometheus node_exporter optional deployment
-- Service Provider (VCSP) integration for v13.0.1+
-- VBR tunning exemple such as Syslog server addition
+- (optional) Prometheus node_exporter deployment
+- (optional) Service Provider (VCSP) integration for v13.0.1+
+- (optional) VBR licensing import and VBR tunning exemple such as Syslog server addition
+- (optional) Support for Automatique unattended configuration restore
 - Enterprise-level logging and error handling
 
 ---
@@ -86,15 +91,20 @@ https://www.veeam.com/kb4772
 
 ### Optionnal Dependencies
 **License file**
-- 'license' folder at / of the folder where you run the script
-- xxx.lic file inside the folder and xxx.lic for the lic parameter
+- `license` folder at / of the folder where you run the script
+- `xxx.lic` file inside the folder and `xxx.lic` for the lic parameter
 
 **node_exporter**
-- 'node_exporter' folder at / of the folder where you run the script
+- `node_exporter` folder at / of the folder where you run the script
 - `LICENSE + node_exporter + NOTICE` inside the folder
 - where `node_exporter` is the uncompressed binary downloaded from offical repo
 - Warning : “fapolicyd” disallow execution of random binary – might not work in the future. Need to add node_exporter repository and rpm file installation instead
 - Might not work on VIA - Hardened Repository
+
+**Configuration Restore**
+- Requires `conf` folder with `unattended.xml`, `veeam_addsoconfpw.sh` and your bco name `conftoresto.bco`
+- Edit `unattended.xml` with your configuration password at BACKUP_PASSWORD. **It's the password for your bco you set in VBR console.**
+- Set JSON `RestoreConfig` to true and edit with your `ConfigPasswordSo`. **It's the password you set as Security Officer.**
 
 ---
 
@@ -151,39 +161,6 @@ https://www.veeam.com/kb4772
     .\autodeploy.ps1 -ConfigFile "production-config.json"
     `
 
-### Legacy Usage (Parameters on command line to override default)
-
-1. Place the script, ISO in the same directory.
-
-2. Run:
-
-    ```
-    .\autodeploy.ps1 `
-        -SourceISO "VeeamSoftwareAppliance_13.0.0.4967_20250822.iso" `
-        -GrubTimeout 45 `
-        -KeyboardLayout "us" `
-        -Timezone "America/New_York" `
-        -Hostname "veeam-backup-prod01" `
-        -UseDHCP:$false `
-        -StaticIP "10.50.100.150" `
-        -Subnet "255.255.255.0" `
-        -Gateway "10.50.100.1" `
-        -DNSServers @("10.50.1.10", "10.50.1.11", "8.8.8.8") `
-        -VeeamAdminPassword "P@ssw0rd2024!123" `
-        -NodeExporter $true `
-        -LicenseVBRTune $true `
-        -VCSPConnection $true
-    ```
-
-### Change default value in the script (dirty)
-
-1. You can also edit the script to change all default parameters
-
-2. Place the script, ISO in the same directory.
-
-3. Run: `.\autodeploy.ps1` 
-
-
 ---
 
 ## Configuration Parameters
@@ -195,15 +172,15 @@ https://www.veeam.com/kb4772
 | ConfigFile    | String | Path to JSON file                 | ""                                        | No          |
 | SourceISO     | String | Source ISO filename (required)    | VeeamSoftwareAppliance_13.0.0.4967_20250822.iso | Yes         |
 | OutputISO     | String | Customized ISO filename           | auto (adds _customized)                   | No          |
-| ApplianceType    | String | VSA, VIA, VIAVMware, and VIAHR               | VSA                                      | No          |
+| ApplianceType    | String | VSA, VIA, VIAVMware, and VIAHR | VSA                                       | No          |
 | InPlace       | Bool   | Modify original ISO directly      | false                                     | No          |
 | CreateBackup  | Bool   | Create backup for InPlace changes | true                                      | No          |
 | CleanupCFGFiles| Bool  | Clean temp config files           | true                                      | No          |
-| CFGOnly | Bool  | write cfg file and don't work with iso   | false                                     | No          |
+| CFGOnly | Bool  | write cfg file and don't touch ISO (for cloudInit/packer)  | false                   | No          |
 | GrubTimeout   | Int    | GRUB timeout (seconds)            | 10                                        | No          |
 | KeyboardLayout| String | Keyboard code                     | fr                                        | No          |
 | Timezone      | String | System timezone                   | Europe/Paris                              | No          |
-| Hostname      | String | Hostname for appliance (15char max for Microsoft Domaine)           | veeam-server                              | No          |
+| Hostname      | String | Hostname for appliance (15char max for Microsoft Domaine)  | veeam-server     | No          |
 
 ### Network Parameters
 
@@ -228,21 +205,23 @@ https://www.veeam.com/kb4772
 | VeeamSoRecoveryToken | String | GUID-format recovery token for SO account emergency access and recovery scenarios | `eb9fcbf4-2be6-e94d-4203-dded67c5a450` |
 | VeeamSoIsEnabled | String | Enable/disable the Security Officer account entirely ("true"/"false") | `"true"` |
 | NtpServer | String | Network Time Protocol server for time synchronization (FQDN or IP address) | `time.nist.gov` |
-| NtpRunSync | String | Enable automatic time synchronization on boot ("true"/"false") | `"false"` |
+| NtpRunSync | String | Enable automatic time synchronization on boot ("true"/"false") | `"true"` |
 
 ### Optional Features
 
 | Parameter           | Type    | Description                      | Default                                   |
 |---------------------|---------|----------------------------------|-------------------------------------------|
-| NodeExporter        | Bool    | Deploy Prometheus node_exporter Local folder required | false                                     |
-| NodeExporterDNF     | Bool    | Deploy Prometheus node_exporter Online required | false                                     |
-| LicenseVBRTune      | Bool    | Auto-install Veeam license (only VSA) | false                                     |
+| NodeExporter        | Bool    | Deploy Prometheus node_exporter Local folder required | false                |
+| NodeExporterDNF     | Bool    | Deploy Prometheus node_exporter Online required | false                      |
+| LicenseVBRTune      | Bool    | Auto-install Veeam license (only VSA) | false                                |
 | LicenseFile         | String  | License filename                 | Veeam-100instances-entplus-monitoring-nfr.lic |
-| SyslogServer        | String  | Syslog server IP                 | 172.17.53.28                              |
+| SyslogServer        | String  | Syslog server IP                 | ""                                        |
 | VCSPConnection      | Bool    | Connect to VCSP  (only VSA)      | false                                     |
 | VCSPUrl             | String  | VCSP server URL                  | ""                                        |
-| VCSPLogin           | String  | VCSP login                      | ""                                        |
-| VCSPPassword        | String  | VCSP password                    | ""                                        |
+| VCSPLogin           | String  | VCSP tenant's login              | ""                                        |
+| VCSPPassword        | String  | VCSP tenant's password           | ""                                        |
+| RestoreConfig       | bool    | Enable unattended Configuration Restore     | false                          |
+| ConfigPasswordSo    | String  | SO Config Password               | ""                                        |
 
 ---
 
@@ -280,11 +259,11 @@ https://www.veeam.com/kb4772
 ### Node_Exporter
 The script automatically creates systemd services for:
 - **Node Exporter**: Prometheus monitoring with firewall configuration 9100
-- **Veeam Initialization**: One-shot service for post-boot configuration
 
 ### VBR Tunning
 - **License Installation**: Automated license deployment and activation
 - **Run custom script** : Exemple PS script : install lic and add Syslog Server
+- If syslog parameters is empty, Add-VBRSyslogServer is not added
 
 Current Exemple in the script is : 
 ```
@@ -298,19 +277,26 @@ $CustomVBRBlock = @(
 )
 ```
 
-### VCSP Connection
+### VCSP Connection (waiting for 13.0.1)
 - **VCSP Connection**: Veeam Service service provider integration with credential management & VSPC management agent flag enable
 
 ### CFG files Only
-- **CFGOnly** : Useful for Packer deployment, you can set parameters to $true thus the script generate only CFG files and do not edit ISO
+- **CFGOnly** : Useful for Packer/CloudInit deployment, you can set parameters to $true thus the script generate only CFG files and do not edit ISO
+
+### Automatique Unattended Restore
+- Only tested with Security Officer and MFA enabled
+- How unattended.xml works : https://helpcenter.veeam.com/docs/vbr/userguide/restore_vbr_linux_edit.html?ver=13
+- find log - Password SO config: /var/log/veeam_addsoconfpw.log & Config restore: /var/log/veeam_configrestore.log"
 
 ---
 
 ## Known issues
-- Using static IP doesn't set DNS properly : BUG in VSA, will be fix by Veeam. Workaround : DHCP or Enter Network parameter and Apply
+- Using static IP doesn't set DNS properly : BUG in VSA, will be fix by Veeam. **Workaround :** DHCP or Enter Network in TUI parameter and Apply
+- Sometimes, after finishing install, it boots on the init wizard but it's already fully configured and you cannot go through. **Workaround :** Reboot or Reinstall
 
 ## Troubleshooting
 
+### making ISO
 - Ensure WSL is installed and available (`wsl --list --verbose`)
 - Install `xorriso` in WSL (`sudo apt-get install xorriso`) or update it
 - If you just installed WSL, you might have permission issue, reboot Windows
@@ -321,7 +307,11 @@ $CustomVBRBlock = @(
 - Use `$CFGOnly=$true` to verify your kickstart file contain all Configurations Blocks
 - Check log file `ISO_Customization.log` for timestamped error messages
 - to browse ISO with WSL xorriso `wsl xorriso -indev "VeeamSoftwareAppliance_13.0.0.4967_20250822.iso" -ls /`
+
+### Booting ISO
 - If your specified answers do not meet these requirements, the configuration process will fail. To troubleshoot errors, you can use the Live OS ISO to view the `/var/log/VeeamBackup/veeam_hostmanager/veeamhostmanager.log` file and the system logs files in the `/var/log/anaconda directory.`
+- Post-install log and Veeam init are stored here : `/var/log/appliance-installation-logs/post-install.log` & `/var/log/veeam_init.log`
+- Unattended Configuration Restore are stored here : wrong SOPassword & TOTP : `/var/log/veeam_addsoconfpw.log` & wrong unattended config password or fail restore : `/var/log/veeam_configrestore.log`
 
 ### Troubleshooting parameters
 

@@ -34,5 +34,6 @@
   "VCSPUrl": "",
   "VCSPLogin": "",
   "VCSPPassword": "",
-  "RestoreConfig": true
+  "RestoreConfig": true,
+  "ConfigPasswordSo": "123p123P123!123"
 }
