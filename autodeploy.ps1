@@ -968,7 +968,7 @@ function Get-VeeamHostConfigBlock {
 function Get-NodeExporterDNFBlock {
     return @(
         "log '[1/4] Enabling Rocky Linux repos and EPEL...'",
-        "rpm -Uvh https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm",
+        "rpm -q epel-release &>/dev/null || rpm -Uvh https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm",
         "dnf clean all && dnf -y makecache",
         "dnf -y install dnf-plugins-core || true",
         "dnf -y config-manager --set-enabled crb || true",
@@ -991,7 +991,7 @@ function Get-NodeExporterDNFBlock {
 function Get-InstalloathtoolBlock {
     return @(
         "log '[1/2] Enabling Rocky Linux repos and EPEL...'",
-        "rpm -Uvh https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm",
+        #"rpm -q epel-release &>/dev/null || rpm -Uvh https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm",
         "dnf clean all && dnf -y makecache",
         "log '[2/2] Installing oathtool and curl...'",
         "dnf -y install oathtool",

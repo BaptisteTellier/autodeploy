@@ -2,7 +2,7 @@
 
 #==============================================================================
 # Veeam VSA Automation Script - Configuration Password
-# Auto-destruction after execution (not configured)
+# Auto-destruction after execution
 #==============================================================================
 
 # Configuration
@@ -66,7 +66,7 @@ cleanup() {
     fi
 }
 
-#trap cleanup EXIT
+trap cleanup EXIT
 
 #==============================================================================
 # Preliminary checks
@@ -229,7 +229,7 @@ else
 fi
 
 log "INFO" "Process completed successfully"
-#log "INFO" "Cleanup in progress"
+log "INFO" "Cleanup in progress"
 
 exit 0
 
