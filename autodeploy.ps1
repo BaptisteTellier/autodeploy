@@ -991,7 +991,7 @@ function Get-NodeExporterDNFBlock {
 function Get-InstalloathtoolBlock {
     return @(
         "log '[1/2] Enabling Rocky Linux repos and EPEL...'",
-        #"rpm -q epel-release &>/dev/null || rpm -Uvh https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm",
+        "rpm -q epel-release &>/dev/null || rpm -Uvh https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm",
         "dnf clean all && dnf -y makecache",
         "log '[2/2] Installing oathtool and curl...'",
         "dnf -y install oathtool",
@@ -1002,25 +1002,50 @@ function Get-InstalloathtoolBlock {
 
 function Get-VeeamRestoreConfigBlock {
    
-    return @(
-        "sleep 10s",
+$commands = @(
+    "sleep 10s"
+)
+
+if ($VeeamSoIsEnabled -eq $true) {
+    $commands += @(
         "echo 'Configuring SO backup password'",
         "chmod +x '/etc/veeam/veeam_addsoconfpw.sh'",
-        "/bin/bash /etc/veeam/veeam_addsoconfpw.sh '$script:ConfigPasswordSo' '$script:VeeamSoMfaSecretKey' '$script:VeeamSoPassword'",
+        "/bin/bash /etc/veeam/veeam_addsoconfpw.sh '$ConfigPasswordSo' '$VeeamSoMfaSecretKey' '$VeeamSoPassword'",
         "echo 'OK : Configuration SO password set'",
-        "sleep 10s",
-        "echo 'Restoring configuration...'",
-        "dotnet /opt/veeam/vbr/Veeam.Backup.Configuration.UnattendedRestore.dll /file:/var/lib/veeam/unattended.xml 2>&1 | tee -a /var/log/veeam_configrestore.log",
-        "echo 'OK : Configuration restored'",
-        "echo 'Additional logs:'",
-        "echo '  - Password SO config: /var/log/veeam_addsoconfpw.log'",
-        "echo '  - Config restore: /var/log/veeam_configrestore.log'",
-        "echo 'Cleaning up oathtool curl and rm unattended.xml veeam_addsoconfpw.sh ...'",
-        "dnf -y remove oathtool curl",
-        "rm -f /var/lib/veeam/unattended.xml",
-        "rm -f /etc/veeam/veeam_addsoconfpw.sh"
-        )
-        #need remove own script after run and uninstall oathtool and curl and unattended.xml
+        "sleep 10s"
+    )
+}
+
+$commands += @(
+    "echo 'Restoring configuration...'",
+    "dotnet /opt/veeam/vbr/Veeam.Backup.Configuration.UnattendedRestore.dll /file:/var/lib/veeam/unattended.xml 2>&1 | tee -a /var/log/veeam_configrestore.log",
+    "echo 'OK : Configuration restored'",
+    "echo 'Additional logs:'"
+    )
+
+if ($VeeamSoIsEnabled -eq $true) {
+    $commands += @(  
+    "echo '  - Password SO config: /var/log/veeam_addsoconfpw.log'"
+    ) 
+}
+$commands += @(
+    "echo '  - Config restore: /var/log/veeam_configrestore.log'"
+)
+if ($VeeamSoIsEnabled -eq $true) {
+    $commands += @(  
+    "echo 'Cleaning up oathtool curl EPEL and rm unattended.xml veeam_addsoconfpw.sh ...'",
+    "dnf -y remove oathtool epel-release",
+    "dnf -e --nodeps curl"
+    "dnf clean all",
+    "rm -f /etc/veeam/veeam_addsoconfpw.sh"
+    )
+}
+
+$commands += @(
+    "rm -f /var/lib/veeam/unattended.xml"
+    )
+
+return $commands
 }
 
 
@@ -1127,8 +1152,9 @@ function Invoke-VSA {
         Write-Log "Adding restore configuration..." 'Info'
         Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine "/usr/bin/cp -rv /tmp/*.* /mnt/sysimage/var/log/appliance-installation-logs/" -NewLines (Get-RestoreFileCopyBlock)
         Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine "/opt/veeam/hostmanager/veeamhostmanager --apply_init_config /etc/veeam/vbr_init.cfg" -NewLines (Get-VeeamRestoreConfigBlock)
+        if ($VeeamSoIsEnabled -eq $true) {
         Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine 'dnf install -y --nogpgcheck --disablerepo="*" /tmp/static-packages/*.rpm' -NewLines (Get-InstalloathtoolBlock)
-
+        }
         if (Test-Path "conf") {
             $confCmd = "wsl xorriso -boot_image any keep -dev `"$($isoInfo.TargetISO)`" -map conf /conf"
             Invoke-WSLCommand -Command $confCmd -Description "Add conf folder to ISO" | Out-Null
