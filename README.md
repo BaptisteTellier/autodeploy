@@ -316,7 +316,7 @@ Process completed successfully
 
 ## Known issues
 - Using static IP doesn't set DNS properly : BUG in VSA, will be fix by Veeam. **Workaround :** DHCP or Enter Network in TUI parameter and Apply
-- Sometimes, after finishing install, it boots on the init wizard but it's already fully configured and you cannot go through. **Workaround :** Reboot or Reinstall
+- Sometimes, after finishing install, it boots on the init wizard but it's already fully configured and you cannot go through. Check `/var/log/veeam_init.log` something went wrong. **Workaround :** Reinstall
 
 ## Troubleshooting
 
