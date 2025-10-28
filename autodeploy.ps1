@@ -992,11 +992,21 @@ function Get-InstalloathtoolBlock {
     return @(
         "log '[1/2] Enabling Rocky Linux repos and EPEL...'",
         "rpm -q epel-release &>/dev/null || rpm -Uvh https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm",
-        "dnf clean all && dnf -y makecache",
+        #"dnf clean all && dnf -y makecache",
+        #"cat << EOF >> /etc/yum.repos.d/offlinerestoconf.repo",
+        #"[offline]",
+        #"name=Offline",
+        #"enabled=1",
+        #"gpgcheck=0",
+        #"baseurl=file:///tmp/rpm/",
+        #"EOF",
+        #"log '[1/2] Installing oathtool and curl from RPMs...'"
+        #"dnf --disablerepo='*' --enablerepo='offlinerestoconf' install -y oathtool curl",
         "log '[2/2] Installing oathtool and curl...'",
         "dnf -y install oathtool",
         "dnf -y install curl",
         "log 'oathtool and curl installation completed'"
+        #"rm /tmp/rpm -rf"
     )
 }
 
@@ -1019,7 +1029,15 @@ if ($VeeamSoIsEnabled -eq $true) {
 $commands += @(
     "echo 'Restoring configuration...'",
     "dotnet /opt/veeam/vbr/Veeam.Backup.Configuration.UnattendedRestore.dll /file:/var/lib/veeam/unattended.xml 2>&1 | tee -a /var/log/veeam_configrestore.log",
+    'if [ ${PIPESTATUS[0]} -ne 0 ]; then',
+    '    sleep 60',
+    '    dotnet /opt/veeam/vbr/Veeam.Backup.Configuration.UnattendedRestore.dll /file:/var/lib/veeam/unattended.xml 2>&1 | tee -a /var/log/veeam_configrestore.log',
+    'fi'
+    'if [ ${PIPESTATUS[0]} -eq 0 ]; then',
     "echo 'OK : Configuration restored'",
+    "else",
+    "echo 'ERROR : Configuration restore failed 2/2 attempts'",
+    'fi',
     "echo 'Additional logs:'"
     )
 
@@ -1033,11 +1051,12 @@ $commands += @(
 )
 if ($VeeamSoIsEnabled -eq $true) {
     $commands += @(  
-    "echo 'Cleaning up oathtool curl EPEL and rm unattended.xml veeam_addsoconfpw.sh ...'",
-    "dnf -y remove oathtool epel-release",
-    "dnf -e --nodeps curl"
+    "echo 'Cleaning up oathtool curl and rm unattended.xml veeam_addsoconfpw.sh ...'",
+    "dnf -y remove oathtool",
+    "rpm -e --nodeps curl",
     "dnf clean all",
-    "rm -f /etc/veeam/veeam_addsoconfpw.sh"
+    "rm -f /etc/veeam/veeam_addsoconfpw.sh",
+    "rm -f /etc/veeam/rpm"
     )
 }
 
@@ -1071,6 +1090,13 @@ function Get-RestoreFileCopyBlock {
         "chmod 600 /mnt/sysimage/etc/veeam/veeam_addsoconfpw.sh",
         "chown root:root /mnt/sysimage/etc/veeam/veeam_addsoconfpw.sh",
         "log 'veeam_addsoconfpw.sh file copy completed'"
+
+        #"# Copy rpm files",
+        #"log 'starting rpm files copy'",
+        #"cp -fr /mnt/install/repo/conf/rpm /mnt/sysimage/tmp/rpm",
+        #"chmod 600 /mnt/sysimage/tmp/rpm",
+        #"chown root:root /mnt/sysimage/tmp/rpm",
+        #"log 'rpm files copy completed'"
     )
 }
 

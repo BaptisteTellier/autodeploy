@@ -188,9 +188,25 @@ else
 fi
 
 #==============================================================================
-# Step 4: Create current configuration password
+# Step 4: Final verification
 #==============================================================================
-log "INFO" "Step 4/5: Create current configuration password"
+log "INFO" "Step 4/4: Final verification"
+FINAL_STATUS=$(curl -k -s -b "$COOKIE_JAR" -w "%{http_code}" -o /dev/null \
+    -X GET "${VSA_URL}/api/v1/bco/imported?" \
+    -H "Accept: application/json" \
+    -H "x-csrf-token: ${CSRF_TOKEN}" \
+    -H "User-Agent: Mozilla/5.0 (Linux) AppleWebKit/537.36")
+
+if [ "$FINAL_STATUS" = "200" ]; then
+    log "INFO" "Final verification successful"
+else
+    log "WARN" "Final verification: HTTP ${FINAL_STATUS}"
+fi
+
+#==============================================================================
+# Step 5: Create current configuration password
+#==============================================================================
+log "INFO" "Step 5/5: Create current configuration password"
 RESPONSE=$(curl -k -s -w "\nHTTP_CODE:%{http_code}" -b "$COOKIE_JAR" -c "$COOKIE_JAR" \
     -X POST "${VSA_URL}/api/v1/bco/current?" \
     -H "Content-Type: application/json;charset=UTF-8" \
@@ -212,24 +228,9 @@ else
     exit 1
 fi
 
-#==============================================================================
-# Step 5: Final verification
-#==============================================================================
-log "INFO" "Step 5/5: Final verification"
-FINAL_STATUS=$(curl -k -s -b "$COOKIE_JAR" -w "%{http_code}" -o /dev/null \
-    -X GET "${VSA_URL}/api/v1/bco/imported?" \
-    -H "Accept: application/json" \
-    -H "x-csrf-token: ${CSRF_TOKEN}" \
-    -H "User-Agent: Mozilla/5.0 (Linux) AppleWebKit/537.36")
-
-if [ "$FINAL_STATUS" = "200" ]; then
-    log "INFO" "Final verification successful"
-else
-    log "WARN" "Final verification: HTTP ${FINAL_STATUS}"
-fi
-
 log "INFO" "Process completed successfully"
 log "INFO" "Cleanup in progress"
 
 exit 0
+
 

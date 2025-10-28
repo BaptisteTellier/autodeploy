@@ -13,7 +13,7 @@ This advanced PowerShell script automates the customization of Veeam Software Ap
 
 ---
 
-## What's New (v2.3) : BIG UPDATE
+## What's New (v2.3)
 
 - Support for Automatique unattended configuration restore
 - Improved log inside VSA
@@ -90,9 +90,9 @@ https://www.veeam.com/kb4772
     `
 
 ### Optionnal Dependencies
-**License file**
+**VBR tunning : License file**
 - `license` folder at / of the folder where you run the script
-- `xxx.lic` file inside the folder and `xxx.lic` for the lic parameter
+- `xxx.lic` file inside the folder and `xxx.lic` for the `LicenseFile` parameter
 - `LicenseVBRTune` set to `$true`
 
 **node_exporter**
@@ -100,11 +100,12 @@ https://www.veeam.com/kb4772
 - `LICENSE + node_exporter + NOTICE` inside the folder
 - where `node_exporter` is the uncompressed binary downloaded from offical repo
 - Warning : “fapolicyd” disallow execution of random binary – might not work in the future. Need to add node_exporter repository and rpm file installation instead
-- Might not work on VIA - Hardened Repository
+- Might not work on VIA - Hardened Repository (not tested)
 
 **Configuration Restore**
-- Requires license optionnal parameters `LicenseVBRTune` & `LicenseFile`
-- Requires `conf` folder with `unattended.xml`, `veeam_addsoconfpw.sh` and your bco name `conftoresto.bco`
+- Requires **VBR tunning : License file** 
+- Requires internet
+- Requires `conf` folder with rpm folder, `unattended.xml`, `veeam_addsoconfpw.sh`, and your bco rename to `conftoresto.bco` (hard coded)
 - Edit `unattended.xml` with your configuration password at BACKUP_PASSWORD. **It's the password for your bco you set in VBR console.**
 - Set JSON `RestoreConfig` to true and edit with your `ConfigPasswordSo`. **It's the password you set as Security Officer.**
 
@@ -288,8 +289,8 @@ $CustomVBRBlock = @(
 - **CFGOnly** : Useful for Packer/CloudInit deployment, you can set parameters to $true thus the script generate only CFG files and do not edit ISO
 
 ### Automatique Unattended Restore
-- Requires internet (install oathtool and curl)
-- Requires `LicenseVBRTune` and `LicenseFile`
+- Requires internet (to install oathtool and curl)
+- Requires `LicenseVBRTune` and `LicenseFile` parameters (see optional feature : VBR Tunning)
 - How unattended.xml works : https://helpcenter.veeam.com/docs/vbr/userguide/restore_vbr_linux_edit.html?ver=13
 - find log - Password SO config: `/var/log/veeam_addsoconfpw.log` & Config restore: `/var/log/veeam_configrestore.log`
 - What veeam_addsoconfpw.sh do :
@@ -335,7 +336,7 @@ Process completed successfully
 ### Booting ISO
 - If your specified answers do not meet these requirements, the configuration process will fail. To troubleshoot errors, you can use the Live OS ISO to view the `/var/log/VeeamBackup/veeam_hostmanager/veeamhostmanager.log` file and the system logs files in the `/var/log/anaconda directory.`
 - Post-install log and Veeam init are stored here : `/var/log/appliance-installation-logs/post-install.log` & `/var/log/veeam_init.log`
-- Unattended Configuration Restore are stored here : wrong SO Password & TOTP : `/var/log/veeam_addsoconfpw.log` & wrong unattended config password or fail restore : `/var/log/veeam_configrestore.log`
+- Unattended Configuration Restore logs are stored here : wrong SO Password & TOTP : `/var/log/veeam_addsoconfpw.log` & wrong unattended config password or fail restore : `/var/log/veeam_configrestore.log`
 
 ### Troubleshooting parameters
 
