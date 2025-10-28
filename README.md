@@ -105,7 +105,7 @@ https://www.veeam.com/kb4772
 **Configuration Restore**
 - Requires **VBR tunning : License file** 
 - Requires internet
-- Requires `conf` folder with rpm folder, `unattended.xml`, `veeam_addsoconfpw.sh`, and your bco rename to `conftoresto.bco` (hard coded)
+- Requires `conf` folder with `unattended.xml`, `veeam_addsoconfpw.sh`, and your bco rename to `conftoresto.bco` (hard coded)
 - Edit `unattended.xml` with your configuration password at BACKUP_PASSWORD. **It's the password for your bco you set in VBR console.**
 - Set JSON `RestoreConfig` to true and edit with your `ConfigPasswordSo`. **It's the password you set as Security Officer.**
 
