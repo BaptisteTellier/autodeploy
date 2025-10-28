@@ -288,11 +288,28 @@ $CustomVBRBlock = @(
 - **CFGOnly** : Useful for Packer/CloudInit deployment, you can set parameters to $true thus the script generate only CFG files and do not edit ISO
 
 ### Automatique Unattended Restore
-- Only tested with Security Officer and MFA enabled
+- Requires internet (install oathtool and curl)
 - Requires `LicenseVBRTune` and `LicenseFile`
-- Not tested with other optionnals features
 - How unattended.xml works : https://helpcenter.veeam.com/docs/vbr/userguide/restore_vbr_linux_edit.html?ver=13
 - find log - Password SO config: `/var/log/veeam_addsoconfpw.log` & Config restore: `/var/log/veeam_configrestore.log`
+- What veeam_addsoconfpw.sh do :
+```
+Retrieving local IP address
+VSA URL: https://192.168.1.169:10443
+Generating TOTP code 
+TOTP code generated
+Step 1/4: Authentication
+Authentication successful
+Step 2/4: Configuration check
+Configuration verified
+Step 3/4: Add password
+Password added successfully
+Step 4/5: Create current configuration password
+Current configuration password created successfully
+Step 5/5: Final verification
+Final verification successful
+Process completed successfully
+```
 
 ---
 
