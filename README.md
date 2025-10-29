@@ -162,7 +162,8 @@ https://www.veeam.com/kb4772
     "VCSPLogin": "",
     "VCSPPassword": "",
     "RestoreConfig": false,
-    "ConfigPasswordSo": ""
+    "ConfigPasswordSo": "",
+    "Debug": false
     }
     ```
 

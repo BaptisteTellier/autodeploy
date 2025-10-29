@@ -633,6 +633,7 @@ function Initialize-ISOOperation {
         IsInPlace = $InPlace.IsPresent
         Mode = if ($CFGOnly) {"CFG ONLY"} elseif ($InPlace) { "In-Place" } else { "Out-of-Place" }
         RestoreConfig = $RestoreConfig
+        Debug = $Debug
     }
 }
 
@@ -706,6 +707,7 @@ function Get-ModificationSummary {
     $summary += "  License Auto-Install: $(if ($LicenseVBRTune) { 'Enabled' } else { 'Disabled' })"
     $summary += "  VCSP Connection: $(if ($VCSPConnection) { 'Enabled' } else { 'Disabled' })"
     $summary += "  Restore Config: $(if ($ISOInfo.RestoreConfig) { 'Enabled' } else { 'Disabled' })"
+    $summary += "  Debug: $(if ($ISOInfo.Debug) { 'Enabled' } else { 'Disabled' })"
     }
     $summary += "=================================================================================================="
 
@@ -1383,6 +1385,12 @@ function Invoke-VSA {
         Write-Host "Backup created: $($isoInfo.BackupPath)" -ForegroundColor Green
     }
     Write-Host "Mode: $($isoInfo.Mode)" -ForegroundColor Green
+    if ($isoInfo.RestoreConfig) {
+        Write-Host "Backup Configuration Restore : $($isoInfo.RestoreConfig)" -ForegroundColor DarkYellow
+    }
+    if ($isoInfo.Debug) {
+        Write-Host "Debug mode : $($isoInfo.Debug)" -ForegroundColor DarkYellow
+    }
     Write-Host "==================================================================================================" -ForegroundColor Green
 
     if($CleanupCFGFiles){
@@ -1816,7 +1824,7 @@ try {
     Start-Transcript -Path $logFile -Append
 
     Write-Log "=================================================================================================="
-    Write-Log "Veeam ISO Customization Script - Version 2.3"
+    Write-Log "Veeam ISO Customization Script - Version 2.4"
     Write-Log "=================================================================================================="
 
     if (-not [string]::IsNullOrWhiteSpace($ConfigFile)) {
