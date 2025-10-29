@@ -10,7 +10,7 @@
   "KeyboardLayout": "fr",
   "Timezone": "Europe/Paris",
   "Hostname": "veeam-backup",
-  "UseDHCP": false,
+  "UseDHCP": true,
   "StaticIP": "192.168.1.166",
   "Subnet": "255.255.255.0",
   "Gateway": "192.168.1.1",
@@ -35,5 +35,6 @@
   "VCSPLogin": "",
   "VCSPPassword": "",
   "RestoreConfig": false,
-  "ConfigPasswordSo": ""
+  "ConfigPasswordSo": "",
+  "Debug": false
 }

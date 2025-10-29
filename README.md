@@ -11,11 +11,18 @@
 
 This advanced PowerShell script automates the customization of Veeam Software Appliance ISO files, enabling fully automated, unattended appliance deployments with enterprise-grade, reusable configurations. It supports JSON configuration loading, out-of-place ISO modification, advanced logging, and optional IS backup creation. Network, security, and monitoring details can be configured to fit enterprise environments.
 
+- Tested on build 13.0.0.4967_20250822
+
 ---
+
+## What's New (v2.4)
+
+- Optionnal feature : Debug ! 
+- Automatique unattended configuration restore now works offline
 
 ## What's New (v2.3)
 
-- Support for Automatique unattended configuration restore
+- Optionnal feature : Automatique unattended configuration restore !
 - Improved log inside VSA
 
 ## What's New (v2.2)
@@ -50,6 +57,7 @@ This advanced PowerShell script automates the customization of Veeam Software Ap
 - (optional) Service Provider (VCSP) integration for v13.0.1+
 - (optional) VBR licensing import and VBR tunning exemple such as Syslog server addition
 - (optional) Support for Automatique unattended configuration restore
+- (optional) Debug mode (enable root and ssh)
 - Enterprise-level logging and error handling
 
 ---
@@ -104,10 +112,9 @@ https://www.veeam.com/kb4772
 
 **Configuration Restore**
 - Requires **VBR tunning : License file** 
-- Requires internet
-- Requires `conf` folder with `unattended.xml`, `veeam_addsoconfpw.sh`, and your bco rename to `conftoresto.bco` (hard coded)
-- Edit `unattended.xml` with your configuration password at BACKUP_PASSWORD. **It's the password for your bco you set in VBR console.**
-- Set JSON `RestoreConfig` to true and edit with your `ConfigPasswordSo`. **It's the password you set as Security Officer.**
+- download `conf` folder from repo with inside `unattended.xml`, `veeam_addsoconfpw.sh`, and your bco rename to `conftoresto.bco` (hard coded)
+- Edit `unattended.xml` with your configuration password at BACKUP_PASSWORD. **It's the password for your configuration you set in VBR console.**
+- Set JSON `RestoreConfig` to true and edit with your `ConfigPasswordSo`. **It's the password you set for "configuration backup" as Security Officer.**
 
 ---
 
@@ -225,8 +232,9 @@ https://www.veeam.com/kb4772
 | VCSPUrl             | String  | VCSP server URL                  | ""                                        |
 | VCSPLogin           | String  | VCSP tenant's login              | ""                                        |
 | VCSPPassword        | String  | VCSP tenant's password           | ""                                        |
-| RestoreConfig       | bool    | Enable unattended Configuration Restore     | false                          |
+| RestoreConfig       | Bool    | Enable unattended Configuration Restore     | false                          |
 | ConfigPasswordSo    | String  | SO Config Password               | ""                                        |
+| Debug               | Bool    | enable root and ssh (don't use in production)             | false                                        |
 
 ---
 
@@ -289,7 +297,6 @@ $CustomVBRBlock = @(
 - **CFGOnly** : Useful for Packer/CloudInit deployment, you can set parameters to $true thus the script generate only CFG files and do not edit ISO
 
 ### Automatique Unattended Restore
-- Requires internet (to install oathtool and curl)
 - Requires `LicenseVBRTune` and `LicenseFile` parameters (see optional feature : VBR Tunning)
 - How unattended.xml works : https://helpcenter.veeam.com/docs/vbr/userguide/restore_vbr_linux_edit.html?ver=13
 - find log - Password SO config: `/var/log/veeam_addsoconfpw.log` & Config restore: `/var/log/veeam_configrestore.log`
@@ -297,12 +304,12 @@ $CustomVBRBlock = @(
 ```
 Retrieving local IP address
 VSA URL: https://192.168.1.169:10443
-Generating TOTP code 
+Generating TOTP code (oathtool)
 TOTP code generated
-Step 1/4: Authentication
+Step 1/4: Authentication (curl)
 Authentication successful
-Step 2/4: Configuration check
-Configuration verified
+Step 2/4: login check
+login verified
 Step 3/4: Add password
 Password added successfully
 Step 4/5: Create current configuration password
@@ -311,12 +318,13 @@ Step 5/5: Final verification
 Final verification successful
 Process completed successfully
 ```
+- install curl and oathtool from offline repo and then removes it
 
 ---
 
 ## Known issues
 - Using static IP doesn't set DNS properly : BUG in VSA, will be fix by Veeam. **Workaround :** DHCP or Enter Network in TUI parameter and Apply
-- Sometimes, after finishing install, it boots on the init wizard but it's already fully configured and you cannot go through. Check `/var/log/veeam_init.log` something went wrong. **Workaround :** Reinstall
+- If it boots on the init wizard but it's already fully configured and you cannot go through. Check `/var/log/veeam_init.log` something went wrong. **Workaround :** Reinstall
 
 ## Troubleshooting
 
@@ -390,6 +398,7 @@ Process completed successfully
 - [x] Automated backup creation before modification ✅ **Completed**
 - [x] Support for JSON configuration file ✅ **Completed**
 - [x] Automated Restore Configuration ✅ **Completed**
+- [x] Automated Restore Configuration offline ✅ **Completed**
 
 ## Support
 
@@ -404,8 +413,8 @@ Process completed successfully
 ## Author & Stats
 
 **Author**: Baptiste TELLIER  
-**Version**: 2.2  
-**Creation**: Octobre 10, 2025
+**Version**: 2.3  
+**Creation**: Octobre 28, 2025
 
 ![GitHub stars](https://img.shields.io/github/stars/PleXi00/autodeploy)
 ![GitHub forks](https://img.shields.io/github/forks/PleXi00/autodeploy)

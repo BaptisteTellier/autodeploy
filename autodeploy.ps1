@@ -11,7 +11,7 @@ Baptiste TELLIER
 .COPYRIGHT
 Copyright (c) 2025 Baptiste TELLIER
 
-.VERSION 2.3
+.VERSION 2.4
 
 .DESCRIPTION
 This PowerShell script provides automation for customizing Veeam Appliance ISO files to enable fully automated, unattended installations.
@@ -192,6 +192,15 @@ Default: $false
 .PARAMETER ConfigPasswordSo
 Security Officer Configuration Password for decrypting the configuration backup during restore.
 
+.PARAMETER Debug
+Enable debug mode for SSH access during installation. When enabled:
+- Keeps SSH service enabled  
+- Sets root password to plaintext (123q123Q123!123)
+- Enables root SSH login
+- Opens SSH port (22) in firewall temporarily
+WARNING: Only use in test/development environments. Do not use in production.
+Default: $false
+
 .EXAMPLE
 Using JSON configuration file with VSA appliance (Recommended)
 .\autodeploy.ps1 -ConfigFile "production-config.json"
@@ -200,7 +209,7 @@ Using JSON configuration file with VSA appliance (Recommended)
 File Name      : autodeploy.ps1
 Author         : Baptiste TELLIER
 Prerequisite   : PowerShell 5.1+, WSL with xorriso installed
-Version        : 2.3
+Version        : 2.4
 Creation Date  : 24/09/2025
 Last Modified  : 26/10/2025
 
@@ -210,6 +219,7 @@ REQUIREMENTS:
 - Optional: JSON configuration file for simplified parameter management
 - Optional: 'license' folder with .lic files for license automation
 - Optional: 'node_exporter' folder with binaries for monitoring deployment
+- Optional: 'conf' folder for unattended configuration restore
 
 USAGE:
 - Place this script in the same directory as your ISO file
@@ -286,7 +296,9 @@ param (
     [string]$VCSPLogin = "",
     [string]$VCSPPassword = "",
     [bool]$RestoreConfig = $false,
-    [string]$ConfigPasswordSo = ""
+    [string]$ConfigPasswordSo = "",
+    [bool]$Debug = $false
+    
 )
 #endregion
 
@@ -525,6 +537,11 @@ function Update-ParametersFromJSON {
     
     if ($Config.PSObject.Properties['ConfigPasswordSo'] -and -not $PSBoundParameters.ContainsKey('ConfigPasswordSo')) {
         $script:ConfigPasswordSo = $Config.ConfigPasswordSo
+        $parametersUpdated++
+    }
+
+    if ($Config.PSObject.Properties['Debug'] -and -not $PSBoundParameters.ContainsKey('Debug')) {
+        $script:Debug = $Config.Debug
         $parametersUpdated++
     }
     
@@ -806,6 +823,93 @@ function Set-NetworkConfiguration {
     Write-Log "Network configuration applied" 'Info'
 }
 
+function Set-DebugSSHModifications {
+    param([string]$FilePath)
+    
+    if (-not $Debug) {
+        return
+    }
+    
+    Write-Log "Applying DEBUG mode SSH modifications..." 'Warn'
+    
+    # Block 1 & 6: Remove all 'systemctl disable sshd.service' lines
+    $content = Get-Content $FilePath
+    $newContent = @()
+    foreach ($line in $content) {
+        if ($line -notlike "*systemctl disable sshd.service*") {
+            $newContent += $line
+        }
+    }
+    Set-Content $FilePath $newContent
+    Write-Log "Removed systemctl disable sshd.service lines" 'Info'
+    
+    # Block 2: Change root password configuration
+    Update-FileContent -FilePath $FilePath -Pattern "rootpw --iscrypted --lock \*" -Replacement "rootpw --allow-ssh --plaintext 123q123Q123!123"
+    Write-Log "Changed root password to plaintext" 'Info'
+    
+    # Block 3: Remove root user line
+    $content = Get-Content $FilePath
+    $newContent = @()
+    foreach ($line in $content) {
+        if ($line -notlike "*user --name root --shell /sbin/nologin*") {
+            $newContent += $line
+        }
+    }
+    Set-Content $FilePath $newContent
+    Write-Log "Removed root user nologin configuration" 'Info'
+    
+    # Block 4: Add SSH firewall rule before static packages installation
+    $content = Get-Content $FilePath
+    $newContent = @()
+    foreach ($line in $content) {
+        if ($line -like "*log 'Install static packages'*" -or $line -like '*log "Install static packages"*') {
+            $newContent += "log '934181 - Temporary allow 22 port in kickstart in debug purposes'"
+            $newContent += "cp /usr/lib/firewalld/zones/drop.xml /etc/firewalld/zones/drop.xml"
+            $newContent += 'sed -i "/<forward\/>/i \  <service name=\"ssh\"/>" /etc/firewalld/zones/drop.xml'
+        }
+        $newContent += $line
+    }
+    Set-Content $FilePath $newContent
+    Write-Log "Added SSH firewall rule before static packages" 'Info'
+    
+    # Block 5: Add SSH root access configuration after "Configure ssh access"
+    $content = Get-Content $FilePath
+    $newContent = @()
+    $foundTarget = $false
+    foreach ($line in $content) {
+        $newContent += $line
+        if (($line -like '*log "Configure ssh access"*' -or $line -like "*log 'Configure ssh access'*") -and -not $foundTarget) {
+            $newContent += "echo 'AllowGroups veeam-grp-admin' >> /etc/ssh/sshd_config.d/00-complianceascode-hardening.conf"
+            $newContent += "log '865459: Temporary enable ssh root access in testing purposes'"
+            $newContent += 'sed -i "s/^PermitRootLogin no/PermitRootLogin yes/" /etc/ssh/sshd_config.d/00-complianceascode-hardening.conf'
+            $newContent += 'sed -i "s/^AllowGroups/AllowGroups root/" /etc/ssh/sshd_config.d/00-complianceascode-hardening.conf'
+            $foundTarget = $true
+        }
+    }
+
+    Write-Log "Added SSH root access configuration" 'Info'
+
+    # Block 5: Reset password expiration for users
+    $content = Get-Content $FilePath
+    $newContent = @()
+    $foundTarget = $false
+    foreach ($line in $content) {
+        $newContent += $line
+        if (($line -like '*systemctl enable veeamhostmanager.service*') -and -not $foundTarget) {
+            $newContent += 'chage -d `$(date +%Y-%m-%d) root'
+            $newContent += 'chage -d `$(date +%Y-%m-%d) veeamadmin'
+            $newContent += 'chage -d $(date +%Y-%m-%d) veeamso'
+            $newContent += 'chage -d $(date +%Y-%m-%d) veeamtui'
+            $foundTarget = $true
+        }
+    }
+
+    Set-Content $FilePath $newContent
+    Write-Log "reset password expiration for users" 'Info'
+    
+    Write-Log "DEBUG mode SSH modifications completed" 'Warn'
+}
+
 #endregion
 
 #region Dynamic Configuration Block Functions
@@ -988,25 +1092,34 @@ function Get-NodeExporterDNFBlock {
     )
 }
 
-function Get-InstalloathtoolBlock {
+function Get-InstalloathtoolOfflineBlock {
+    return @(
+        "log '[1/2] Enabling offline repository...'",
+        "cat << EOF >> /etc/yum.repos.d/local-offline.repo",
+        "[local-offline]",
+        "name=Local Offline Repository for oathtool and curl",
+        "enabled=1",
+        "gpgcheck=0",
+        "baseurl=file:///tmp/offline_repo",
+        "EOF",
+        "log '[1/2] Installing oathtool and curl from RPMs...'"
+        "dnf clean all --releasever 9",
+        "dnf --disablerepo='*' --enablerepo='local-offline' install -y oathtool curl --releasever 9",
+        "log 'oathtool and curl installation completed'"
+        "log 'removing offline repository /tmp/offline_repo '",
+        "rm /tmp/offline_repo -rf"
+    )
+}
+
+function Get-InstalloathtoolOnlineBlock {
     return @(
         "log '[1/2] Enabling Rocky Linux repos and EPEL...'",
         "rpm -q epel-release &>/dev/null || rpm -Uvh https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm",
-        #"dnf clean all && dnf -y makecache",
-        #"cat << EOF >> /etc/yum.repos.d/offlinerestoconf.repo",
-        #"[offline]",
-        #"name=Offline",
-        #"enabled=1",
-        #"gpgcheck=0",
-        #"baseurl=file:///tmp/rpm/",
-        #"EOF",
-        #"log '[1/2] Installing oathtool and curl from RPMs...'"
-        #"dnf --disablerepo='*' --enablerepo='offlinerestoconf' install -y oathtool curl",
+        "dnf clean all && dnf -y makecache",
         "log '[2/2] Installing oathtool and curl...'",
         "dnf -y install oathtool",
         "dnf -y install curl",
         "log 'oathtool and curl installation completed'"
-        #"rm /tmp/rpm -rf"
     )
 }
 
@@ -1028,15 +1141,26 @@ if ($VeeamSoIsEnabled -eq $true) {
 
 $commands += @(
     "echo 'Restoring configuration...'",
+    '# Temporarily disable pipefail for retry logic',
+    'set +e',
+    'set +o pipefail', 
+    '',
     "dotnet /opt/veeam/vbr/Veeam.Backup.Configuration.UnattendedRestore.dll /file:/var/lib/veeam/unattended.xml 2>&1 | tee -a /var/log/veeam_configrestore.log",
     'if [ ${PIPESTATUS[0]} -ne 0 ]; then',
+    '    echo "First attempt failed, retrying in 60 seconds..."',
     '    sleep 60',
     '    dotnet /opt/veeam/vbr/Veeam.Backup.Configuration.UnattendedRestore.dll /file:/var/lib/veeam/unattended.xml 2>&1 | tee -a /var/log/veeam_configrestore.log',
     'fi'
+    '',
+    '# Re-enable strict mode',
+    'set -e',
+    'set -o pipefail',
+    '',
     'if [ ${PIPESTATUS[0]} -eq 0 ]; then',
     "echo 'OK : Configuration restored'",
     "else",
     "echo 'ERROR : Configuration restore failed 2/2 attempts'",
+    'exit 1',
     'fi',
     "echo 'Additional logs:'"
     )
@@ -1051,9 +1175,9 @@ $commands += @(
 )
 if ($VeeamSoIsEnabled -eq $true) {
     $commands += @(  
-    "echo 'Cleaning up oathtool curl and rm unattended.xml veeam_addsoconfpw.sh ...'",
+    "echo 'Cleaning up oathtool and rm unattended.xml veeam_addsoconfpw.sh ...'",
     "dnf -y remove oathtool",
-    "rpm -e --nodeps curl",
+    #"rpm -e --nodeps curl",
     "dnf clean all",
     "rm -f /etc/veeam/veeam_addsoconfpw.sh",
     "rm -f /etc/veeam/rpm"
@@ -1091,12 +1215,10 @@ function Get-RestoreFileCopyBlock {
         "chown root:root /mnt/sysimage/etc/veeam/veeam_addsoconfpw.sh",
         "log 'veeam_addsoconfpw.sh file copy completed'"
 
-        #"# Copy rpm files",
-        #"log 'starting rpm files copy'",
-        #"cp -fr /mnt/install/repo/conf/rpm /mnt/sysimage/tmp/rpm",
-        #"chmod 600 /mnt/sysimage/tmp/rpm",
-        #"chown root:root /mnt/sysimage/tmp/rpm",
-        #"log 'rpm files copy completed'"
+        "# Copy rpm files",
+        "log 'starting rpm files copy'",
+        "cp -fr /mnt/install/repo/conf/offline_repo /mnt/sysimage/tmp/offline_repo",
+        "log 'rpm files copy completed'"
     )
 }
 
@@ -1174,12 +1296,16 @@ function Invoke-VSA {
 
     Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine 'find /etc/yum.repos.d/ -type f -not -name "*veeam*" -delete' -NewLines (Get-VeeamHostConfigBlock)
 
-        if ($RestoreConfig) {
+    if ($Debug) {
+        Set-DebugSSHModifications -FilePath "vbr-ks.cfg"
+    }
+    
+    if ($RestoreConfig) {
         Write-Log "Adding restore configuration..." 'Info'
         Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine "/usr/bin/cp -rv /tmp/*.* /mnt/sysimage/var/log/appliance-installation-logs/" -NewLines (Get-RestoreFileCopyBlock)
         Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine "/opt/veeam/hostmanager/veeamhostmanager --apply_init_config /etc/veeam/vbr_init.cfg" -NewLines (Get-VeeamRestoreConfigBlock)
         if ($VeeamSoIsEnabled -eq $true) {
-        Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine 'dnf install -y --nogpgcheck --disablerepo="*" /tmp/static-packages/*.rpm' -NewLines (Get-InstalloathtoolBlock)
+            Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine 'dnf install -y --nogpgcheck --disablerepo="*" /tmp/static-packages/*.rpm' -NewLines (Get-InstalloathtoolOfflineBlock)
         }
         if (Test-Path "conf") {
             $confCmd = "wsl xorriso -boot_image any keep -dev `"$($isoInfo.TargetISO)`" -map conf /conf"
