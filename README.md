@@ -111,7 +111,6 @@ https://www.veeam.com/kb4772
 - Might not work on VIA - Hardened Repository (not tested)
 
 **Configuration Restore**
-- Requires **VBR tunning : License file** 
 - download `conf` folder from repo with inside `unattended.xml`, `veeam_addsoconfpw.sh`, and your bco rename to `conftoresto.bco` (hard coded)
 - Edit `unattended.xml` with your configuration password at BACKUP_PASSWORD. **It's the password for your configuration you set in VBR console.**
 - Set JSON `RestoreConfig` to true and edit with your `ConfigPasswordSo`. **It's the password you set for "configuration backup" as Security Officer.**
