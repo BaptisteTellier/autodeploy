@@ -898,8 +898,8 @@ function Set-DebugSSHModifications {
     foreach ($line in $content) {
         $newContent += $line
         if (($line -like '*systemctl enable veeamhostmanager.service*') -and -not $foundTarget) {
-            $newContent += 'chage -d `$(date +%Y-%m-%d) root'
-            $newContent += 'chage -d `$(date +%Y-%m-%d) veeamadmin'
+            $newContent += 'chage -d $(date +%Y-%m-%d) root'
+            $newContent += 'chage -d $(date +%Y-%m-%d) veeamadmin'
             $newContent += 'chage -d $(date +%Y-%m-%d) veeamso'
             $newContent += 'chage -d $(date +%Y-%m-%d) veeamtui'
             $foundTarget = $true
@@ -928,9 +928,9 @@ function Get-CustomVBRBlock {
     if ($SyslogServer) {
         $block += "Set-VBRServerSyslog -SyslogServer '$SyslogServer' -SyslogPort 514 -Protocol UDP"
     }
-    $block += "echo 'License file applied successfully'"
     $block += "'"
-    
+    $block += "echo 'License file applied successfully'"
+   
     return $block
 }
 
@@ -1104,11 +1104,11 @@ function Get-InstalloathtoolOfflineBlock {
         "gpgcheck=0",
         "baseurl=file:///tmp/offline_repo",
         "EOF",
-        "log '[1/2] Installing oathtool and curl from RPMs...'"
+        "log '[2/2] Installing oathtool and curl from RPMs...'",
         "dnf clean all --releasever 9",
         "dnf --disablerepo='*' --enablerepo='local-offline' install -y oathtool curl --releasever 9",
         "log 'oathtool and curl installation completed'"
-        "log 'removing offline repository /tmp/offline_repo '",
+        "log 'removing offline repository /tmp/offline_repo'"
         "rm /tmp/offline_repo -rf"
     )
 }
@@ -1179,10 +1179,8 @@ if ($VeeamSoIsEnabled -eq $true) {
     $commands += @(  
     "echo 'Cleaning up oathtool and rm unattended.xml veeam_addsoconfpw.sh ...'",
     "dnf -y remove oathtool",
-    #"rpm -e --nodeps curl",
     "dnf clean all",
-    "rm -f /etc/veeam/veeam_addsoconfpw.sh",
-    "rm -f /etc/veeam/rpm"
+    "rm -f /etc/veeam/veeam_addsoconfpw.sh"
     )
 }
 
@@ -1305,13 +1303,17 @@ function Invoke-VSA {
     if ($RestoreConfig) {
         Write-Log "Adding restore configuration..." 'Info'
         Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine "/usr/bin/cp -rv /tmp/*.* /mnt/sysimage/var/log/appliance-installation-logs/" -NewLines (Get-RestoreFileCopyBlock)
+
         Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine "/opt/veeam/hostmanager/veeamhostmanager --apply_init_config /etc/veeam/vbr_init.cfg" -NewLines (Get-VeeamRestoreConfigBlock)
         if ($VeeamSoIsEnabled -eq $true) {
             Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine 'dnf install -y --nogpgcheck --disablerepo="*" /tmp/static-packages/*.rpm' -NewLines (Get-InstalloathtoolOfflineBlock)
+            #Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine '/opt/veeam/hostmanager/veeamhostmanager --apply_init_config /etc/veeam/vbr_init.cfg' -NewLines (Get-InstalloathtoolOfflineBlock)
         }
-        if (Test-Path "conf") {
-            $confCmd = "wsl xorriso -boot_image any keep -dev `"$($isoInfo.TargetISO)`" -map conf /conf"
-            Invoke-WSLCommand -Command $confCmd -Description "Add conf folder to ISO" | Out-Null
+        if(-not $CFGOnly){
+            if (Test-Path "conf") {
+                $confCmd = "wsl xorriso -boot_image any keep -dev `"$($isoInfo.TargetISO)`" -map conf /conf"
+                Invoke-WSLCommand -Command $confCmd -Description "Add conf folder to ISO" | Out-Null
+            }
         }
     }
 
@@ -1319,10 +1321,11 @@ function Invoke-VSA {
         Write-Log "Adding license configuration..." 'Info'
         Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine "/opt/veeam/hostmanager/veeamhostmanager --apply_init_config /etc/veeam/vbr_init.cfg" -NewLines (Get-CustomVBRBlock)
         Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine "/usr/bin/cp -rv /tmp/*.* /mnt/sysimage/var/log/appliance-installation-logs/" -NewLines (Get-CopyLicenseBlock)
-
-        if (Test-Path "license") {
-            $licenseCmd = "wsl xorriso -boot_image any keep -dev `"$($isoInfo.TargetISO)`" -map license /license"
-            Invoke-WSLCommand -Command $licenseCmd -Description "Add license folder to ISO" | Out-Null
+        if(-not $CFGOnly){
+            if (Test-Path "license") {
+                $licenseCmd = "wsl xorriso -boot_image any keep -dev `"$($isoInfo.TargetISO)`" -map license /license"
+                Invoke-WSLCommand -Command $licenseCmd -Description "Add license folder to ISO" | Out-Null
+            }
         }
     }
 
@@ -1336,10 +1339,11 @@ function Invoke-VSA {
         Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine 'dnf install -y --nogpgcheck --disablerepo="*" /tmp/static-packages/*.rpm' -NewLines (Get-NodeExporterSetupBlock)
         Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine "/usr/bin/cp -rv /tmp/*.* /mnt/sysimage/var/log/appliance-installation-logs/" -NewLines (Get-CopyNodeExporterBlock)
         Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine "/opt/veeam/hostmanager/veeamhostmanager --apply_init_config /etc/veeam/vbr_init.cfg" -NewLines (Get-NodeExporterFirewallBlock)
-
-        if (Test-Path "node_exporter") {
-            $nodeCmd = "wsl xorriso -boot_image any keep -dev `"$($isoInfo.TargetISO)`" -map node_exporter /node_exporter"
-            Invoke-WSLCommand -Command $nodeCmd -Description "Add node_exporter folder to ISO" | Out-Null
+        if(-not $CFGOnly){
+            if (Test-Path "node_exporter") {
+                $nodeCmd = "wsl xorriso -boot_image any keep -dev `"$($isoInfo.TargetISO)`" -map node_exporter /node_exporter"
+                Invoke-WSLCommand -Command $nodeCmd -Description "Add node_exporter folder to ISO" | Out-Null
+            }
         }
     }
 

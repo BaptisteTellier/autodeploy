@@ -218,7 +218,7 @@ https://www.veeam.com/kb4772
 | VeeamSoRecoveryToken | String | GUID-format recovery token for SO account emergency access and recovery scenarios | `eb9fcbf4-2be6-e94d-4203-dded67c5a450` |
 | VeeamSoIsEnabled | String | Enable/disable the Security Officer account entirely ("true"/"false") | `"true"` |
 | NtpServer | String | Network Time Protocol server for time synchronization (FQDN or IP address) | `time.nist.gov` |
-| NtpRunSync | String | Enable automatic time synchronization on boot ("true"/"false") | `"true"` |
+| NtpRunSync | String | Enable automatic time synchronization on boot ("true"/"false") - if sync fails customization fails | `"true"` |
 
 ### Optional Features
 
@@ -298,8 +298,9 @@ $CustomVBRBlock = @(
 - **CFGOnly** : Useful for Packer/CloudInit deployment, you can set parameters to $true thus the script generate only CFG files and do not edit ISO
 
 ### Automatique Unattended Restore
-- Requires `LicenseVBRTune` and `LicenseFile` parameters (see optional feature : VBR Tunning)
+- (Can use optional feature : VBR Tunning to install license)
 - How unattended.xml works : https://helpcenter.veeam.com/docs/vbr/userguide/restore_vbr_linux_edit.html?ver=13
+- **Restore process can be very long** : check `/var/log/veeam_init.log` for progression
 - find log - Password SO config: `/var/log/veeam_addsoconfpw.log` & Config restore: `/var/log/veeam_configrestore.log`
 - What veeam_addsoconfpw.sh do :
 ```
@@ -324,6 +325,7 @@ Process completed successfully
 ---
 
 ## Known issues
+- If you enable NtpRunSync and it fails, customization fails
 - Using static IP doesn't set DNS properly : BUG in VSA, will be fix by Veeam. **Workaround :** DHCP or Enter Network in TUI parameter and Apply
 - If it boots on the init wizard but it's already fully configured and you cannot go through. Check `/var/log/veeam_init.log` something went wrong. **Workaround :** Reinstall
 
@@ -345,6 +347,7 @@ Process completed successfully
 ### Booting ISO
 - If your specified answers do not meet these requirements, the configuration process will fail. To troubleshoot errors, you can use the Live OS ISO to view the `/var/log/VeeamBackup/veeam_hostmanager/veeamhostmanager.log` file and the system logs files in the `/var/log/anaconda directory.`
 - Post-install log and Veeam init are stored here : `/var/log/appliance-installation-logs/post-install.log` & `/var/log/veeam_init.log`
+- If you enable NtpRunSync and it fails, customization fails
 - Unattended Configuration Restore logs are stored here : wrong SO Password & TOTP : `/var/log/veeam_addsoconfpw.log` & wrong unattended config password or fail restore : `/var/log/veeam_configrestore.log`
 
 ### Troubleshooting parameters
