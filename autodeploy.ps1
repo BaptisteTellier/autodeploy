@@ -211,7 +211,7 @@ Author         : Baptiste TELLIER
 Prerequisite   : PowerShell 5.1+, WSL with xorriso installed
 Version        : 2.4
 Creation Date  : 24/09/2025
-Last Modified  : 26/10/2025
+Last Modified  : 30/10/2025
 
 REQUIREMENTS:
 - Windows Subsystem for Linux (WSL) with xorriso package installed

@@ -17,7 +17,7 @@ This advanced PowerShell script automates the customization of Veeam Software Ap
 
 ## What's New (v2.4)
 
-- Optionnal feature : Debug ! 
+- Optionnal feature : Debug ! (enable root and ssh)
 - Automatique unattended configuration restore now works offline
 
 ## What's New (v2.3)
@@ -417,8 +417,8 @@ Process completed successfully
 ## Author & Stats
 
 **Author**: Baptiste TELLIER  
-**Version**: 2.3  
-**Creation**: Octobre 28, 2025
+**Version**: 2.4 
+**Creation**: Octobre 30, 2025
 
 ![GitHub stars](https://img.shields.io/github/stars/PleXi00/autodeploy)
 ![GitHub forks](https://img.shields.io/github/forks/PleXi00/autodeploy)
