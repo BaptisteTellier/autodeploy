@@ -297,9 +297,11 @@ $CustomVBRBlock = @(
 - **CFGOnly** : Useful for Packer/CloudInit deployment, you can set parameters to $true thus the script generate only CFG files and do not edit ISO
 
 ### Automatique Unattended Restore
-- (Can use optional feature : VBR Tunning to install license)
+- (works with optional feature : VBR Tunning to install license)
 - How unattended.xml works : https://helpcenter.veeam.com/docs/vbr/userguide/restore_vbr_linux_edit.html?ver=13
 - **Restore process can be very long** : check `/var/log/veeam_init.log` for progression
+
+To speedup the process, you can set `"vbr_control.runStart=false"` in the script ( hardcoded `function Get-VeeamHostConfigBlock`)
 - find log - Password SO config: `/var/log/veeam_addsoconfpw.log` & Config restore: `/var/log/veeam_configrestore.log`
 - What veeam_addsoconfpw.sh do :
 ```
