@@ -936,13 +936,45 @@ function Get-CustomVBRBlock {
 
 function Get-CustomVCSPBlock {
     return @(
-        "# Connect to Service Provider with Mgmt Agent",
+        "echo 'Requesting External Component access...'",
+        "chmod +x '/etc/veeam/veeam_requestexternal.sh'",
+        "/bin/bash /etc/veeam/veeam_requestexternal.sh '$VeeamAdminMfaSecretKey' 'veeamadmin' '$VeeamAdminPassword'",
+        "echo 'OK : Request External Component access done'",
+        "sleep 5s",
+        "echo 'Accepting Request'",
+        "chmod +x '/etc/veeam/veeam_sovalidrequest.sh'",
+        "/bin/bash /etc/veeam/veeam_sovalidrequest.sh '$VeeamSoMfaSecretKey' 'veeamso' '$VeeamSoPassword'",
+        "echo 'OK : Request accepted successfully'",
+        "sleep 5s",
+        "echo 'Adding to Service Provider with Mgmt Agent'",
         "pwsh -Command '",
         "Import-Module /opt/veeam/powershell/Veeam.Backup.PowerShell/Veeam.Backup.PowerShell.psd1",
         "Add-VBRCloudProviderCredentials -Name '$VCSPLogin' -Password '$VCSPPassword'",
         "`$credentials = Get-VBRCloudProviderCredentials -Name '$VCSPLogin'",
-        "Add-VBRCloudProvider -Address '$VCSPUrl' -Credentials `$credentials -InstallManagementAgent",
+        "Add-VBRCloudProvider -Address '$VCSPUrl' -Credentials `$credentials -InstallManagementAgent -Force",
         "'"
+        #"echo 'Cleaning up oathtool and script ...'",
+        #"dnf -y remove oathtool",
+        #"dnf clean all",
+        #"rm -f /etc/veeam/veeam_sovalidrequest.sh /etc/veeam/veeam_requestexternal.sh"
+    )
+}
+
+function Get-VCSPCopyBlock {
+    return @(
+        "# Copy veeam_requestexternal.sh file",
+        "log 'starting veeam_requestexternal.sh file copy'",
+        "cp -f /mnt/install/repo/vcsp/veeam_requestexternal.sh /mnt/sysimage/etc/veeam/veeam_requestexternal.sh",
+        "chmod 600 /mnt/sysimage/etc/veeam/veeam_requestexternal.sh",
+        "chown root:root /mnt/sysimage/etc/veeam/veeam_requestexternal.sh",
+        "log 'veeam_requestexternal.sh file copy completed'"
+
+        "# Copy veeam_sovalidrequest.sh file",
+        "log 'starting veeam_sovalidrequest.sh file copy'",
+        "cp -f /mnt/install/repo/vcsp/veeam_sovalidrequest.sh /mnt/sysimage/etc/veeam/veeam_sovalidrequest.sh",
+        "chmod 600 /mnt/sysimage/etc/veeam/veeam_sovalidrequest.sh",
+        "chown root:root /mnt/sysimage/etc/veeam/veeam_sovalidrequest.sh",
+        "log 'veeam_sovalidrequest.sh file copy completed'"
     )
 }
 
@@ -1005,9 +1037,10 @@ function Get-NodeExporterSetupBlock {
 
 function Get-NodeExporterFirewallBlock {
     return @(
-        "# Configure firewall for node_exporter",
+        "echo 'Configure firewall for node_exporter'",
         "firewall-cmd --permanent --zone=drop --add-port=9100/tcp",
         "firewall-cmd --reload"
+        "echo 'Firewall configured for node_exporter 9100/tcp'"
     )
 }
 
@@ -1035,7 +1068,7 @@ function Get-VeeamHostConfigBlock {
         "#  Automatic Host Manager configuration TRIGGER AFTER REBOOT",
         "###############################################################################",
         "log 'starting /etc/veeam/veeam-init.sh'",
-        "cat << EOF >> /etc/veeam/veeam-init.sh",
+        "cat << 'EOF' >> /etc/veeam/veeam-init.sh",
         "#!/bin/bash",
         "set -eE -u -o pipefail",
         "# Configuration logging",
@@ -1191,7 +1224,6 @@ $commands += @(
 return $commands
 }
 
-
 function Get-RestoreFileCopyBlock {
     return @(
         "# Copy Restore configuration file",
@@ -1214,11 +1246,14 @@ function Get-RestoreFileCopyBlock {
         "chmod 600 /mnt/sysimage/etc/veeam/veeam_addsoconfpw.sh",
         "chown root:root /mnt/sysimage/etc/veeam/veeam_addsoconfpw.sh",
         "log 'veeam_addsoconfpw.sh file copy completed'"
+    )
+}
 
-        "# Copy rpm files",
-        "log 'starting rpm files copy'",
-        "cp -fr /mnt/install/repo/conf/offline_repo /mnt/sysimage/tmp/offline_repo",
-        "log 'rpm files copy completed'"
+function Get-OfflineRepoFileCopyBlock {
+    return @(
+        "log 'starting offline repo copy'",
+        "cp -fr /mnt/install/repo/offline_repo /mnt/sysimage/tmp/offline_repo",
+        "log 'rpm offline repo completed'"
     )
 }
 
@@ -1277,7 +1312,7 @@ function Invoke-VSA {
     }
 
     Write-Log "Configuring GRUB bootloader..." 'Info'
-    Update-FileContent -FilePath "grub.cfg" -Pattern '^(.*LABEL=Rocky-9-2-x86_64:/vbr-ks.cfg quiet.*)$' -Replacement '${1} inst.assumeyes'
+    Update-FileContent -FilePath "grub.cfg" -Pattern '^(.*inst.ks=hd:LABEL=VeeamSA:/vbr-ks.cfg quiet.*)$' -Replacement '${1} inst.assumeyes'
     $newDefault = '"Veeam Backup & Replication v13.0>Install - fresh install, wipes everything (including local backups)"'
     Update-FileContent -FilePath "grub.cfg" -Pattern 'set default=.*' -Replacement "set default=$newDefault"
     Update-FileContent -FilePath "grub.cfg" -Pattern 'set timeout=.*' -Replacement "set timeout=$GrubTimeout"
@@ -1303,6 +1338,7 @@ function Invoke-VSA {
     if ($RestoreConfig) {
         Write-Log "Adding restore configuration..." 'Info'
         Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine "/usr/bin/cp -rv /tmp/*.* /mnt/sysimage/var/log/appliance-installation-logs/" -NewLines (Get-RestoreFileCopyBlock)
+        Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine "/usr/bin/cp -rv /tmp/*.* /mnt/sysimage/var/log/appliance-installation-logs/" -NewLines (Get-OfflineRepoFileCopyBlock)
 
         Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine "/opt/veeam/hostmanager/veeamhostmanager --apply_init_config /etc/veeam/vbr_init.cfg" -NewLines (Get-VeeamRestoreConfigBlock)
         if ($VeeamSoIsEnabled -eq $true) {
@@ -1313,6 +1349,29 @@ function Invoke-VSA {
             if (Test-Path "conf") {
                 $confCmd = "wsl xorriso -boot_image any keep -dev `"$($isoInfo.TargetISO)`" -map conf /conf"
                 Invoke-WSLCommand -Command $confCmd -Description "Add conf folder to ISO" | Out-Null
+            }
+            if (Test-Path "offline_repo") {
+                $confCmd = "wsl xorriso -boot_image any keep -dev `"$($isoInfo.TargetISO)`" -map offline_repo /offline_repo"
+                Invoke-WSLCommand -Command $confCmd -Description "Add offline_repo folder to ISO" | Out-Null
+            }
+        }
+    }
+
+    if ($VCSPConnection) {
+        Write-Log "Adding VCSP configuration..." 'Info'
+        Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine "/usr/bin/cp -rv /tmp/*.* /mnt/sysimage/var/log/appliance-installation-logs/" -NewLines (Get-VCSPCopyBlock)
+        Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine "/usr/bin/cp -rv /tmp/*.* /mnt/sysimage/var/log/appliance-installation-logs/" -NewLines (Get-OfflineRepoFileCopyBlock)
+        Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine 'dnf install -y --nogpgcheck --disablerepo="*" /tmp/static-packages/*.rpm' -NewLines (Get-InstalloathtoolOfflineBlock)
+
+        Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine "/opt/veeam/hostmanager/veeamhostmanager --apply_init_config /etc/veeam/vbr_init.cfg" -NewLines (Get-CustomVCSPBlock)
+        if(-not $CFGOnly){
+            if (Test-Path "vcsp") {
+                $confCmd = "wsl xorriso -boot_image any keep -dev `"$($isoInfo.TargetISO)`" -map vcsp /vcsp"
+                Invoke-WSLCommand -Command $confCmd -Description "Add vcsp folder to ISO" | Out-Null
+            }
+            if (Test-Path "offline_repo") {
+                $confCmd = "wsl xorriso -boot_image any keep -dev `"$($isoInfo.TargetISO)`" -map offline_repo /offline_repo"
+                Invoke-WSLCommand -Command $confCmd -Description "Add offline_repo folder to ISO" | Out-Null
             }
         }
     }
@@ -1327,11 +1386,6 @@ function Invoke-VSA {
                 Invoke-WSLCommand -Command $licenseCmd -Description "Add license folder to ISO" | Out-Null
             }
         }
-    }
-
-    if ($VCSPConnection) {
-        Write-Log "Adding VCSP configuration..." 'Info'
-        Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine "/opt/veeam/hostmanager/veeamhostmanager --apply_init_config /etc/veeam/vbr_init.cfg" -NewLines (Get-CustomVCSPBlock)
     }
 
     if ($NodeExporter) {
@@ -1352,8 +1406,6 @@ function Invoke-VSA {
         Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine 'dnf install -y --nogpgcheck --disablerepo="*" /tmp/static-packages/*.rpm' -NewLines (Get-NodeExporterDNFBlock)
         Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine "/opt/veeam/hostmanager/veeamhostmanager --apply_init_config /etc/veeam/vbr_init.cfg" -NewLines (Get-NodeExporterFirewallBlock)
     }
-
-
 
     Write-Log "Normalizing line endings..." 'Info'
     @("vbr-ks.cfg", "grub.cfg") | ForEach-Object {
