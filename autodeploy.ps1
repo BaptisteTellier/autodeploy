@@ -752,7 +752,7 @@ function Add-ContentAfterLine {
             }
         }
 
-        Set-Content $FilePath $newContent
+        $newContent | Set-Content -Path $FilePath
     }
     catch {
         Write-Log "Failed to add content to $FilePath`: $($_.Exception.Message)" 'Error'
@@ -849,15 +849,18 @@ function Set-DebugSSHModifications {
     Update-FileContent -FilePath $FilePath -Pattern "rootpw --iscrypted --lock \*" -Replacement "rootpw --allow-ssh --plaintext 123q123Q123!123"
     Write-Log "Changed root password to plaintext" 'Info'
     
-    # Block 3: Remove root user line
-    $content = Get-Content $FilePath
+    # Block 3: Remove root user line - add bin bash shell
+
+    Update-FileContent -FilePath $FilePath -Pattern "user --name root --shell /sbin/nologin*" -Replacement "user --name root --shell /bin/bash"
+
+<#     $content = Get-Content $FilePath
     $newContent = @()
     foreach ($line in $content) {
         if ($line -notlike "*user --name root --shell /sbin/nologin*") {
             $newContent += $line
         }
     }
-    Set-Content $FilePath $newContent
+    Set-Content $FilePath $newContent #>
     Write-Log "Removed root user nologin configuration" 'Info'
     
     # Block 4: Add SSH firewall rule before static packages installation
@@ -865,7 +868,7 @@ function Set-DebugSSHModifications {
     $newContent = @()
     foreach ($line in $content) {
         if ($line -like "*log 'Install static packages'*" -or $line -like '*log "Install static packages"*') {
-            $newContent += "log '934181 - Temporary allow 22 port in kickstart in debug purposes'"
+            $newContent += "log 'Temporary allow 22 port in kickstart in debug purposes'"
             $newContent += "cp /usr/lib/firewalld/zones/drop.xml /etc/firewalld/zones/drop.xml"
             $newContent += 'sed -i "/<forward\/>/i \  <service name=\"ssh\"/>" /etc/firewalld/zones/drop.xml'
         }
@@ -875,19 +878,27 @@ function Set-DebugSSHModifications {
     Write-Log "Added SSH firewall rule before static packages" 'Info'
     
     # Block 5: Add SSH root access configuration after "Configure ssh access"
-    $content = Get-Content $FilePath
+    
+    <#     $content = Get-Content $FilePath
     $newContent = @()
     $foundTarget = $false
     foreach ($line in $content) {
         $newContent += $line
-        if (($line -like '*log "Configure ssh access"*' -or $line -like "*log 'Configure ssh access'*") -and -not $foundTarget) {
-            $newContent += "echo 'AllowGroups veeam-grp-admin' >> /etc/ssh/sshd_config.d/00-complianceascode-hardening.conf"
-            $newContent += "log '865459: Temporary enable ssh root access in testing purposes'"
-            $newContent += 'sed -i "s/^PermitRootLogin no/PermitRootLogin yes/" /etc/ssh/sshd_config.d/00-complianceascode-hardening.conf'
-            $newContent += 'sed -i "s/^AllowGroups/AllowGroups root/" /etc/ssh/sshd_config.d/00-complianceascode-hardening.conf'
+        
+        # Match the echo line that writes AllowGroups
+        if ($line -like '*echo "AllowGroups veeam-grp-admin"*' -and -not $foundTarget) {
+            # Add the SSH root access configuration AFTER the echo command
+            $newContent += ""
+            $newContent += "log 'Temporary enable ssh root access in testing purposes'"
+            $newContent += "echo 'PermitRootLogin yes' >> /etc/ssh/sshd_config.d/00-complianceascode-hardening.conf"
+            $newContent += "sed -i 's/AllowGroups veeam-grp-admin/AllowGroups veeam-grp-admin root/' /etc/ssh/sshd_config.d/00-complianceascode-hardening.conf"
+            $newContent += "systemctl restart sshd"
             $foundTarget = $true
         }
-    }
+    } #>
+    #Set-Content $FilePath $newContent
+
+    Update-FileContent -FilePath $FilePath -Pattern 'echo "AllowGroups veeam-grp-admin".*' -Replacement "`$1`n`nlog 'Temporary enable ssh root access in testing purposes'`ncat > /etc/ssh/sshd_config.d/00-complianceascode-hardening.conf << EOF`nAllowGroups veeam-grp-admin root`nPermitRootLogin yes`nEOF`nsystemctl restart sshd"
 
     Write-Log "Added SSH root access configuration" 'Info'
 
@@ -902,6 +913,7 @@ function Set-DebugSSHModifications {
             $newContent += 'chage -d $(date +%Y-%m-%d) veeamadmin'
             $newContent += 'chage -d $(date +%Y-%m-%d) veeamso'
             $newContent += 'chage -d $(date +%Y-%m-%d) veeamtui'
+            $newContent += 'usermod -s /bin/bash root'
             $foundTarget = $true
         }
     }
@@ -958,6 +970,120 @@ function Get-CustomVCSPBlock {
         #"dnf clean all",
         #"rm -f /etc/veeam/veeam_sovalidrequest.sh /etc/veeam/veeam_requestexternal.sh"
     )
+}
+
+function Get-CustomVCSPBlock2 {
+$bashScript = 
+@"
+#==============================================================================
+# Request External Component with retry
+#==============================================================================
+echo 'Requesting External Component access...'
+chmod +x '/etc/veeam/veeam_requestexternal.sh'
+
+ATTEMPT=1
+SUCCESS=0
+while [ `$ATTEMPT -le 3 ]; do
+    echo "[Attempt `$ATTEMPT/3] Running veeam_requestexternal.sh"
+    if /bin/bash /etc/veeam/veeam_requestexternal.sh '$VeeamAdminMfaSecretKey' 'veeamadmin' '$VeeamAdminPassword'; then
+        echo "[SUCCESS] Request completed on attempt `$ATTEMPT"
+        SUCCESS=1
+        break
+    else
+        echo "[FAILED] Request failed on attempt `$ATTEMPT"
+        if [ `$ATTEMPT -lt 3 ]; then
+            echo "Waiting 5 seconds before retry..."
+            sleep 5
+        fi
+    fi
+    ATTEMPT=`$((ATTEMPT + 1))
+done
+
+if [ `$SUCCESS -eq 0 ]; then
+    echo '[ERROR] Failed to request external component after 3 attempts'
+    exit 1
+fi
+
+echo 'OK : Request External Component access done'
+sleep 5
+
+#==============================================================================
+# Accept Request with retry
+#==============================================================================
+echo 'Accepting Request...'
+chmod +x '/etc/veeam/veeam_sovalidrequest.sh'
+
+ATTEMPT=1
+SUCCESS=0
+while [ `$ATTEMPT -le 3 ]; do
+    echo "[Attempt `$ATTEMPT/3] Running veeam_sovalidrequest.sh"
+    if /bin/bash /etc/veeam/veeam_sovalidrequest.sh '$VeeamSoMfaSecretKey' 'veeamso' '$VeeamSoPassword'; then
+        echo "[SUCCESS] Request accepted on attempt `$ATTEMPT"
+        SUCCESS=1
+        break
+    else
+        echo "[FAILED] Request validation failed on attempt `$ATTEMPT"
+        if [ `$ATTEMPT -lt 3 ]; then
+            echo "Waiting 5 seconds before retry..."
+            sleep 5
+        fi
+    fi
+    ATTEMPT=`$((ATTEMPT + 1))
+done
+
+if [ `$SUCCESS -eq 0 ]; then
+    echo '[ERROR] Failed to accept request after 3 attempts'
+    exit 1
+fi
+
+echo 'OK : Request accepted successfully'
+sleep 15
+
+#==============================================================================
+# Add to Service Provider
+#==============================================================================
+echo 'Adding to Service Provider with Mgmt Agent'
+
+ATTEMPT=1
+SUCCESS=0
+while [ `$ATTEMPT -le 3 ]; do
+    echo "[Attempt `$ATTEMPT/3] Running Powershell to add cloud provider"
+    if pwsh -Command '
+        Import-Module /opt/veeam/powershell/Veeam.Backup.PowerShell/Veeam.Backup.PowerShell.psd1
+        `$credentials = Get-VBRCloudProviderCredentials -Name "$VCSPLogin"
+        if (-not `$credentials) {
+            write-Host "Credentials not found, adding new credentials"
+            Add-VBRCloudProviderCredentials -Name "$VCSPLogin" -Password "$VCSPPassword"
+            `$credentials = Get-VBRCloudProviderCredentials -Name "$VCSPLogin"
+        }
+        else {
+            write-Host "Credentials found"
+            write-Host "adding cloud provider..."
+            Add-VBRCloudProvider -Address "$VCSPUrl" -Credentials `$credentials -InstallManagementAgent -Force
+            write-Host "Cloud provider added successfully"
+        }
+        '; then
+        echo "[SUCCESS] Powershell add provider worked on attempt number `$ATTEMPT"
+        SUCCESS=1
+        break
+    else
+        echo "[FAILED] adding cloud provider `$ATTEMPT"
+        if [ `$ATTEMPT -lt 3 ]; then
+            echo "Waiting 15 seconds before retry..."
+            sleep 15
+        fi
+    fi
+    ATTEMPT=`$((ATTEMPT + 1))
+done
+
+if [ `$SUCCESS -eq 0 ]; then
+    echo '[ERROR] Failed to add service provider after 3 attempts'
+    exit 1
+fi
+
+echo 'OK : Added to Service Provider successfully'
+"@
+    return $bashScript -replace "`r`n", "`n"
 }
 
 function Get-VCSPCopyBlock {
@@ -1078,6 +1204,13 @@ function Get-VeeamHostConfigBlock {
         "echo 'Disabling veeam-init service...'",
         "systemctl disable veeam-init",
         "echo 'OK : Service disabled'",
+        "echo 'Restarting getty services...'",
+        "systemctl restart getty@tty1.service",
+        "systemctl restart getty@tty2.service",
+        "systemctl restart getty@tty3.service",
+        "systemctl restart getty@tty4.service",
+        "systemctl restart getty@tty5.service",
+        "echo 'OK : Getty services restarted'",
         "echo '==========================================='",
         "echo 'Veeam VSA Initialization Completed Successfully'",
         "echo '==========================================='",
@@ -1363,7 +1496,7 @@ function Invoke-VSA {
         Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine "/usr/bin/cp -rv /tmp/*.* /mnt/sysimage/var/log/appliance-installation-logs/" -NewLines (Get-OfflineRepoFileCopyBlock)
         Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine 'dnf install -y --nogpgcheck --disablerepo="*" /tmp/static-packages/*.rpm' -NewLines (Get-InstalloathtoolOfflineBlock)
 
-        Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine "/opt/veeam/hostmanager/veeamhostmanager --apply_init_config /etc/veeam/vbr_init.cfg" -NewLines (Get-CustomVCSPBlock)
+        Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine "/opt/veeam/hostmanager/veeamhostmanager --apply_init_config /etc/veeam/vbr_init.cfg" -NewLines (Get-CustomVCSPBlock2)
         if(-not $CFGOnly){
             if (Test-Path "vcsp") {
                 $confCmd = "wsl xorriso -boot_image any keep -dev `"$($isoInfo.TargetISO)`" -map vcsp /vcsp"
@@ -1411,7 +1544,7 @@ function Invoke-VSA {
     @("vbr-ks.cfg", "grub.cfg") | ForEach-Object {
         $content = Get-Content $_ -Raw
         $content = $content.Replace("`r`n", "`n")
-        Set-Content $_ $content -NoNewline
+        Set-Content $_ $content -NoNewline -Encoding UTF8
     }
     
     if(-not $CFGOnly){
@@ -1517,7 +1650,7 @@ function Invoke-VIA {
     }
 
     Write-Log "Configuring GRUB bootloader..." 'Info'
-    $pattern = "^(.*LABEL=Rocky-9-2-x86_64:/$CFGname quiet.*)$"
+    $pattern = "^(.*LABEL=VeeamJeOS:/$CFGname quiet.*)$"
     Update-FileContent -FilePath "grub.cfg" -Pattern $pattern -Replacement '${1} inst.assumeyes'
     $newDefault = '"Veeam Infrastructure Appliance>Install - fresh install, wipes everything (including local backups)"'
     Update-FileContent -FilePath "grub.cfg" -Pattern 'set default=.*' -Replacement "set default=$newDefault"
@@ -1660,7 +1793,7 @@ function Invoke-VIAVMware {
     }
 
     Write-Log "Configuring GRUB bootloader..." 'Info'
-    $pattern = "^(.*LABEL=Rocky-9-2-x86_64:/$CFGname quiet.*)$"
+    $pattern = "^(.*LABEL=VeeamJeOS:/$CFGname quiet.*)$"
     Update-FileContent -FilePath "grub.cfg" -Pattern $pattern -Replacement '${1} inst.assumeyes'
     $newDefault = '"Veeam Infrastructure Appliance (with iSCSI & NVMe/TCP)>Install - fresh install, wipes everything (including local backups)"'
     Update-FileContent -FilePath "grub.cfg" -Pattern 'set default=.*' -Replacement "set default=$newDefault"
@@ -1803,7 +1936,7 @@ function Invoke-VIAHR {
     }
 
     Write-Log "Configuring GRUB bootloader..." 'Info'
-    $pattern = "^(.*LABEL=Rocky-9-2-x86_64:/$CFGname quiet.*)$"
+    $pattern = "^(.*LABEL=VeeamJeOS:/$CFGname quiet.*)$"
     Update-FileContent -FilePath "grub.cfg" -Pattern $pattern -Replacement '${1} inst.assumeyes'
     $newDefault = '"Veeam Hardened Repository>Install - fresh install, wipes everything (including local backups)"'
     Update-FileContent -FilePath "grub.cfg" -Pattern 'set default=.*' -Replacement "set default=$newDefault"
