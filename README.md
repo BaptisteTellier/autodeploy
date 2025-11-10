@@ -15,6 +15,13 @@ This advanced PowerShell script automates the customization of Veeam Software Ap
 
 ---
 
+## What's New (v2.5)
+
+- Now works with RTM_13.0.1.180_20251101
+- Confirmed with RTM : Add service provider works
+- Enhanced logics with retry for reliability
+- Restart TTY end of script for reliability
+
 ## What's New (v2.4)
 
 - Optionnal feature : Debug ! (enable root and ssh)
