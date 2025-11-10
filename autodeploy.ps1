@@ -11,7 +11,7 @@ Baptiste TELLIER
 .COPYRIGHT
 Copyright (c) 2025 Baptiste TELLIER
 
-.VERSION 2.4
+.VERSION 2.5
 
 .DESCRIPTION
 This PowerShell script provides automation for customizing Veeam Appliance ISO files to enable fully automated, unattended installations.
@@ -209,9 +209,9 @@ Using JSON configuration file with VSA appliance (Recommended)
 File Name      : autodeploy.ps1
 Author         : Baptiste TELLIER
 Prerequisite   : PowerShell 5.1+, WSL with xorriso installed
-Version        : 2.4
+Version        : 2.5
 Creation Date  : 24/09/2025
-Last Modified  : 30/10/2025
+Last Modified  : 10/11/2025
 
 REQUIREMENTS:
 - Windows Subsystem for Linux (WSL) with xorriso package installed
@@ -852,15 +852,6 @@ function Set-DebugSSHModifications {
     # Block 3: Remove root user line - add bin bash shell
 
     Update-FileContent -FilePath $FilePath -Pattern "user --name root --shell /sbin/nologin*" -Replacement "user --name root --shell /bin/bash"
-
-<#     $content = Get-Content $FilePath
-    $newContent = @()
-    foreach ($line in $content) {
-        if ($line -notlike "*user --name root --shell /sbin/nologin*") {
-            $newContent += $line
-        }
-    }
-    Set-Content $FilePath $newContent #>
     Write-Log "Removed root user nologin configuration" 'Info'
     
     # Block 4: Add SSH firewall rule before static packages installation
@@ -879,25 +870,6 @@ function Set-DebugSSHModifications {
     
     # Block 5: Add SSH root access configuration after "Configure ssh access"
     
-    <#     $content = Get-Content $FilePath
-    $newContent = @()
-    $foundTarget = $false
-    foreach ($line in $content) {
-        $newContent += $line
-        
-        # Match the echo line that writes AllowGroups
-        if ($line -like '*echo "AllowGroups veeam-grp-admin"*' -and -not $foundTarget) {
-            # Add the SSH root access configuration AFTER the echo command
-            $newContent += ""
-            $newContent += "log 'Temporary enable ssh root access in testing purposes'"
-            $newContent += "echo 'PermitRootLogin yes' >> /etc/ssh/sshd_config.d/00-complianceascode-hardening.conf"
-            $newContent += "sed -i 's/AllowGroups veeam-grp-admin/AllowGroups veeam-grp-admin root/' /etc/ssh/sshd_config.d/00-complianceascode-hardening.conf"
-            $newContent += "systemctl restart sshd"
-            $foundTarget = $true
-        }
-    } #>
-    #Set-Content $FilePath $newContent
-
     Update-FileContent -FilePath $FilePath -Pattern 'echo "AllowGroups veeam-grp-admin".*' -Replacement "`$1`n`nlog 'Temporary enable ssh root access in testing purposes'`ncat > /etc/ssh/sshd_config.d/00-complianceascode-hardening.conf << EOF`nAllowGroups veeam-grp-admin root`nPermitRootLogin yes`nEOF`nsystemctl restart sshd"
 
     Write-Log "Added SSH root access configuration" 'Info'
@@ -1082,6 +1054,12 @@ if [ `$SUCCESS -eq 0 ]; then
 fi
 
 echo 'OK : Added to Service Provider successfully'
+echo 'removing scripts & oathtool...'
+rm -f /etc/veeam/veeam_sovalidrequest.sh /etc/veeam/veeam_requestexternal.sh
+dnf -y remove oathtool",
+dnf clean all",
+echo 'scripts & oathtool removed successfully'
+
 "@
     return $bashScript -replace "`r`n", "`n"
 }
@@ -1386,7 +1364,7 @@ function Get-OfflineRepoFileCopyBlock {
     return @(
         "log 'starting offline repo copy'",
         "cp -fr /mnt/install/repo/offline_repo /mnt/sysimage/tmp/offline_repo",
-        "log 'rpm offline repo completed'"
+        "log 'copy offline repo completed'"
     )
 }
 
