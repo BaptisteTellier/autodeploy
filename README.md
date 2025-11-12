@@ -11,14 +11,14 @@
 
 This advanced PowerShell script automates the customization of Veeam Software Appliance ISO files, enabling fully automated, unattended appliance deployments with enterprise-grade, reusable configurations. It supports JSON configuration loading, out-of-place ISO modification, advanced logging, and optional IS backup creation. Network, security, and monitoring details can be configured to fit enterprise environments.
 
-- Tested on build 13.0.0.4967_20250822
+- Tested on build 13.0.0.4967_20250822 & 13.0.1.180_20251101
 
 ---
 
 ## What's New (v2.5)
 
 - Now works with RTM_13.0.1.180_20251101
-- Confirmed with RTM : Add service provider works
+- Confirmed with RTM : Add service provider works with SO (no logic added w/o SO yet)
 - Enhanced logics with retry for reliability
 - Restart TTY end of script for reliability
 
@@ -113,14 +113,22 @@ https://www.veeam.com/kb4772
 **node_exporter**
 - `node_exporter` folder at / of the folder where you run the script
 - `LICENSE + node_exporter + NOTICE` inside the folder
-- where `node_exporter` is the uncompressed binary downloaded from offical repo
+- Where `node_exporter` is the uncompressed binary downloaded from offical repo
 - Warning : “fapolicyd” disallow execution of random binary – might not work in the future. Need to add node_exporter repository and rpm file installation instead
 - Might not work on VIA - Hardened Repository (not tested)
+- Use `NodeExporterDNF` parameters to download & install instead using local folder (requires internet)
+
+**Veeam Service Provider support**
+- download `vcsp` folder from repo with `veeam_requestexternal.sh`, `veeam_sovalidrequest.sh`
+- fill json parameters starting with VCSP
+- download `offline_repo` folder and place it at / of the folder where you run the script
+
 
 **Configuration Restore**
 - download `conf` folder from repo with inside `unattended.xml`, `veeam_addsoconfpw.sh`, and your bco rename to `conftoresto.bco` (hard coded)
 - Edit `unattended.xml` with your configuration password at BACKUP_PASSWORD. **It's the password for your configuration you set in VBR console.**
 - Set JSON `RestoreConfig` to true and edit with your `ConfigPasswordSo`. **It's the password you set for "configuration backup" as Security Officer.**
+- download `offline_repo` folder and place it at / of the folder where you run the script
 
 ---
 
@@ -132,7 +140,7 @@ https://www.veeam.com/kb4772
 
     ```
     {
-    "SourceISO": "VeeamSoftwareAppliance_13.0.0.4967_20250822.iso",
+    "SourceISO": "VeeamSoftwareAppliance_13.0.1.180_20251101.iso",
     "OutputISO": "",
     "ApplianceType": "VSA",
     "InPlace": false,
@@ -274,11 +282,12 @@ https://www.veeam.com/kb4772
 
 ---
 
-## Optional feature
+## How Optional Feature works :
 
 ### Node_Exporter
 The script automatically creates systemd services for:
-- **Node Exporter**: Prometheus monitoring with firewall configuration 9100
+- Prometheus monitoring with firewall configuration 9100
+- if you use DNF json parameters, it will download and install node_exporter from online repo
 
 ### VBR Tunning
 - **License Installation**: Automated license deployment and activation
@@ -297,8 +306,14 @@ $CustomVBRBlock = @(
 )
 ```
 
-### VCSP Connection (waiting for 13.0.1)
+### VCSP Connection (RTM 13.0.1 and above)
 - **VCSP Connection**: Veeam Service service provider integration with credential management & VSPC management agent flag enable
+- (works with optional feature : VBR Tunning to install license)
+- work only with SO for now
+- `veeam_requestexternal.sh` and `veeam_sovalidrequest.sh` are use at first boot, during `veeam-init.sh` to enable analytics on hostmanager before adding the VCSP
+- check `/var/log/veeam_init.log` for progression but also directly named log
+- it install curl and oathtool from offline repo and then removes it
+
 
 ### CFG files Only
 - **CFGOnly** : Useful for Packer/CloudInit deployment, you can set parameters to $true thus the script generate only CFG files and do not edit ISO
@@ -354,6 +369,7 @@ Process completed successfully
 
 ### Booting ISO
 - If your specified answers do not meet these requirements, the configuration process will fail. To troubleshoot errors, you can use the Live OS ISO to view the `/var/log/VeeamBackup/veeam_hostmanager/veeamhostmanager.log` file and the system logs files in the `/var/log/anaconda directory.`
+- During installation and after boot, you can try CTRL+ALT+1 to 6 to change TTY, sometimes welcome wizard will dispears and you can check logs
 - Post-install log and Veeam init are stored here : `/var/log/appliance-installation-logs/post-install.log` & `/var/log/veeam_init.log`
 - If you enable NtpRunSync and it fails, customization fails
 - Unattended Configuration Restore logs are stored here : wrong SO Password & TOTP : `/var/log/veeam_addsoconfpw.log` & wrong unattended config password or fail restore : `/var/log/veeam_configrestore.log`
@@ -411,6 +427,10 @@ Process completed successfully
 - [x] Support for JSON configuration file ✅ **Completed**
 - [x] Automated Restore Configuration ✅ **Completed**
 - [x] Automated Restore Configuration offline ✅ **Completed**
+- [ ] Test Automated Restore Configuration offline with RTM/GA
+- [ ] Add offline repo support for node_exporter instead of binary
+- [ ] Remove curl after install to only keep curl (minimal)
+
 
 ## Support
 
@@ -425,8 +445,8 @@ Process completed successfully
 ## Author & Stats
 
 **Author**: Baptiste TELLIER  
-**Version**: 2.4 
-**Creation**: Octobre 30, 2025
+**Version**: 2.5
+**Creation**: November 12, 2025
 
 ![GitHub stars](https://img.shields.io/github/stars/PleXi00/autodeploy)
 ![GitHub forks](https://img.shields.io/github/forks/PleXi00/autodeploy)

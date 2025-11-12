@@ -1030,10 +1030,10 @@ while [ `$ATTEMPT -le 3 ]; do
         }
         else {
             write-Host "Credentials found"
-            write-Host "adding cloud provider..."
-            Add-VBRCloudProvider -Address "$VCSPUrl" -Credentials `$credentials -InstallManagementAgent -Force
-            write-Host "Cloud provider added successfully"
         }
+        write-Host "adding cloud provider..."
+        Add-VBRCloudProvider -Address "$VCSPUrl" -Credentials `$credentials -InstallManagementAgent -Force
+        write-Host "Cloud provider added successfully"
         '; then
         echo "[SUCCESS] Powershell add provider worked on attempt number `$ATTEMPT"
         SUCCESS=1
@@ -1056,8 +1056,8 @@ fi
 echo 'OK : Added to Service Provider successfully'
 echo 'removing scripts & oathtool...'
 rm -f /etc/veeam/veeam_sovalidrequest.sh /etc/veeam/veeam_requestexternal.sh
-dnf -y remove oathtool",
-dnf clean all",
+dnf -y remove oathtool
+dnf clean all
 echo 'scripts & oathtool removed successfully'
 
 "@
@@ -1454,7 +1454,6 @@ function Invoke-VSA {
         Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine "/opt/veeam/hostmanager/veeamhostmanager --apply_init_config /etc/veeam/vbr_init.cfg" -NewLines (Get-VeeamRestoreConfigBlock)
         if ($VeeamSoIsEnabled -eq $true) {
             Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine 'dnf install -y --nogpgcheck --disablerepo="*" /tmp/static-packages/*.rpm' -NewLines (Get-InstalloathtoolOfflineBlock)
-            #Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine '/opt/veeam/hostmanager/veeamhostmanager --apply_init_config /etc/veeam/vbr_init.cfg' -NewLines (Get-InstalloathtoolOfflineBlock)
         }
         if(-not $CFGOnly){
             if (Test-Path "conf") {
