@@ -1,3 +1,4 @@
+#Requires -Version 7.0
 <#
 .SYNOPSIS
 Veeam Appliance ISO Automation Tool
@@ -11,7 +12,7 @@ Baptiste TELLIER
 .COPYRIGHT
 Copyright (c) 2025 Baptiste TELLIER
 
-.VERSION 2.5
+.VERSION 2.6
 
 .DESCRIPTION
 This PowerShell script provides automation for customizing Veeam Appliance ISO files to enable fully automated, unattended installations.
@@ -208,10 +209,10 @@ Using JSON configuration file with VSA appliance (Recommended)
 .NOTES
 File Name      : autodeploy.ps1
 Author         : Baptiste TELLIER
-Prerequisite   : PowerShell 5.1+, WSL with xorriso installed
-Version        : 2.5
+Prerequisite   : PowerShell 7+, WSL with xorriso installed
+Version        : 2.6
 Creation Date  : 24/09/2025
-Last Modified  : 10/11/2025
+Last Modified  : 19/11/2025
 
 REQUIREMENTS:
 - Windows Subsystem for Linux (WSL) with xorriso package installed
@@ -918,98 +919,16 @@ function Get-CustomVBRBlock {
     return $block
 }
 
-function Get-CustomVCSPBlock {
-    return @(
-        "echo 'Requesting External Component access...'",
-        "chmod +x '/etc/veeam/veeam_requestexternal.sh'",
-        "/bin/bash /etc/veeam/veeam_requestexternal.sh '$VeeamAdminMfaSecretKey' 'veeamadmin' '$VeeamAdminPassword'",
-        "echo 'OK : Request External Component access done'",
-        "sleep 5s",
-        "echo 'Accepting Request'",
-        "chmod +x '/etc/veeam/veeam_sovalidrequest.sh'",
-        "/bin/bash /etc/veeam/veeam_sovalidrequest.sh '$VeeamSoMfaSecretKey' 'veeamso' '$VeeamSoPassword'",
-        "echo 'OK : Request accepted successfully'",
-        "sleep 5s",
-        "echo 'Adding to Service Provider with Mgmt Agent'",
-        "pwsh -Command '",
-        "Import-Module /opt/veeam/powershell/Veeam.Backup.PowerShell/Veeam.Backup.PowerShell.psd1",
-        "Add-VBRCloudProviderCredentials -Name '$VCSPLogin' -Password '$VCSPPassword'",
-        "`$credentials = Get-VBRCloudProviderCredentials -Name '$VCSPLogin'",
-        "Add-VBRCloudProvider -Address '$VCSPUrl' -Credentials `$credentials -InstallManagementAgent -Force",
-        "'"
-        #"echo 'Cleaning up oathtool and script ...'",
-        #"dnf -y remove oathtool",
-        #"dnf clean all",
-        #"rm -f /etc/veeam/veeam_sovalidrequest.sh /etc/veeam/veeam_requestexternal.sh"
-    )
-}
-
-function Get-CustomVCSPBlock2 {
+function Get-CustomVCSPBlock3 {
 $bashScript = 
 @"
 #==============================================================================
-# Request External Component with retry
+# enable external managers installation
 #==============================================================================
-echo 'Requesting External Component access...'
-chmod +x '/etc/veeam/veeam_requestexternal.sh'
-
-ATTEMPT=1
-SUCCESS=0
-while [ `$ATTEMPT -le 3 ]; do
-    echo "[Attempt `$ATTEMPT/3] Running veeam_requestexternal.sh"
-    if /bin/bash /etc/veeam/veeam_requestexternal.sh '$VeeamAdminMfaSecretKey' 'veeamadmin' '$VeeamAdminPassword'; then
-        echo "[SUCCESS] Request completed on attempt `$ATTEMPT"
-        SUCCESS=1
-        break
-    else
-        echo "[FAILED] Request failed on attempt `$ATTEMPT"
-        if [ `$ATTEMPT -lt 3 ]; then
-            echo "Waiting 5 seconds before retry..."
-            sleep 5
-        fi
-    fi
-    ATTEMPT=`$((ATTEMPT + 1))
-done
-
-if [ `$SUCCESS -eq 0 ]; then
-    echo '[ERROR] Failed to request external component after 3 attempts'
-    exit 1
-fi
-
-echo 'OK : Request External Component access done'
-sleep 5
-
-#==============================================================================
-# Accept Request with retry
-#==============================================================================
-echo 'Accepting Request...'
-chmod +x '/etc/veeam/veeam_sovalidrequest.sh'
-
-ATTEMPT=1
-SUCCESS=0
-while [ `$ATTEMPT -le 3 ]; do
-    echo "[Attempt `$ATTEMPT/3] Running veeam_sovalidrequest.sh"
-    if /bin/bash /etc/veeam/veeam_sovalidrequest.sh '$VeeamSoMfaSecretKey' 'veeamso' '$VeeamSoPassword'; then
-        echo "[SUCCESS] Request accepted on attempt `$ATTEMPT"
-        SUCCESS=1
-        break
-    else
-        echo "[FAILED] Request validation failed on attempt `$ATTEMPT"
-        if [ `$ATTEMPT -lt 3 ]; then
-            echo "Waiting 5 seconds before retry..."
-            sleep 5
-        fi
-    fi
-    ATTEMPT=`$((ATTEMPT + 1))
-done
-
-if [ `$SUCCESS -eq 0 ]; then
-    echo '[ERROR] Failed to accept request after 3 attempts'
-    exit 1
-fi
-
-echo 'OK : Request accepted successfully'
-sleep 15
+echo 'enabling external managers installation...'
+touch /etc/veeam/allow_external_managers_installation
+echo 'external managers installation enabled'
+sleep 2
 
 #==============================================================================
 # Add to Service Provider
@@ -1054,32 +973,12 @@ if [ `$SUCCESS -eq 0 ]; then
 fi
 
 echo 'OK : Added to Service Provider successfully'
-echo 'removing scripts & oathtool...'
-rm -f /etc/veeam/veeam_sovalidrequest.sh /etc/veeam/veeam_requestexternal.sh
-dnf -y remove oathtool
-dnf clean all
-echo 'scripts & oathtool removed successfully'
-
+sleep 2
+echo 'disable allow_external_managers_installation flag'
+rm -f /etc/veeam/allow_external_managers_installation
+echo 'flag disabled successfully'
 "@
     return $bashScript -replace "`r`n", "`n"
-}
-
-function Get-VCSPCopyBlock {
-    return @(
-        "# Copy veeam_requestexternal.sh file",
-        "log 'starting veeam_requestexternal.sh file copy'",
-        "cp -f /mnt/install/repo/vcsp/veeam_requestexternal.sh /mnt/sysimage/etc/veeam/veeam_requestexternal.sh",
-        "chmod 600 /mnt/sysimage/etc/veeam/veeam_requestexternal.sh",
-        "chown root:root /mnt/sysimage/etc/veeam/veeam_requestexternal.sh",
-        "log 'veeam_requestexternal.sh file copy completed'"
-
-        "# Copy veeam_sovalidrequest.sh file",
-        "log 'starting veeam_sovalidrequest.sh file copy'",
-        "cp -f /mnt/install/repo/vcsp/veeam_sovalidrequest.sh /mnt/sysimage/etc/veeam/veeam_sovalidrequest.sh",
-        "chmod 600 /mnt/sysimage/etc/veeam/veeam_sovalidrequest.sh",
-        "chown root:root /mnt/sysimage/etc/veeam/veeam_sovalidrequest.sh",
-        "log 'veeam_sovalidrequest.sh file copy completed'"
-    )
 }
 
 function Get-CopyLicenseBlock {
@@ -1254,18 +1153,6 @@ function Get-InstalloathtoolOfflineBlock {
         "log 'oathtool and curl installation completed'"
         "log 'removing offline repository /tmp/offline_repo'"
         "rm /tmp/offline_repo -rf"
-    )
-}
-
-function Get-InstalloathtoolOnlineBlock {
-    return @(
-        "log '[1/2] Enabling Rocky Linux repos and EPEL...'",
-        "rpm -q epel-release &>/dev/null || rpm -Uvh https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm",
-        "dnf clean all && dnf -y makecache",
-        "log '[2/2] Installing oathtool and curl...'",
-        "dnf -y install oathtool",
-        "dnf -y install curl",
-        "log 'oathtool and curl installation completed'"
     )
 }
 
@@ -1469,21 +1356,7 @@ function Invoke-VSA {
 
     if ($VCSPConnection) {
         Write-Log "Adding VCSP configuration..." 'Info'
-        Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine "/usr/bin/cp -rv /tmp/*.* /mnt/sysimage/var/log/appliance-installation-logs/" -NewLines (Get-VCSPCopyBlock)
-        Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine "/usr/bin/cp -rv /tmp/*.* /mnt/sysimage/var/log/appliance-installation-logs/" -NewLines (Get-OfflineRepoFileCopyBlock)
-        Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine 'dnf install -y --nogpgcheck --disablerepo="*" /tmp/static-packages/*.rpm' -NewLines (Get-InstalloathtoolOfflineBlock)
-
-        Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine "/opt/veeam/hostmanager/veeamhostmanager --apply_init_config /etc/veeam/vbr_init.cfg" -NewLines (Get-CustomVCSPBlock2)
-        if(-not $CFGOnly){
-            if (Test-Path "vcsp") {
-                $confCmd = "wsl xorriso -boot_image any keep -dev `"$($isoInfo.TargetISO)`" -map vcsp /vcsp"
-                Invoke-WSLCommand -Command $confCmd -Description "Add vcsp folder to ISO" | Out-Null
-            }
-            if (Test-Path "offline_repo") {
-                $confCmd = "wsl xorriso -boot_image any keep -dev `"$($isoInfo.TargetISO)`" -map offline_repo /offline_repo"
-                Invoke-WSLCommand -Command $confCmd -Description "Add offline_repo folder to ISO" | Out-Null
-            }
-        }
+        Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine "/opt/veeam/hostmanager/veeamhostmanager --apply_init_config /etc/veeam/vbr_init.cfg" -NewLines (Get-CustomVCSPBlock3)
     }
 
     if ($LicenseVBRTune) {
@@ -1517,14 +1390,14 @@ function Invoke-VSA {
         Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine "/opt/veeam/hostmanager/veeamhostmanager --apply_init_config /etc/veeam/vbr_init.cfg" -NewLines (Get-NodeExporterFirewallBlock)
     }
 
-    Write-Log "Normalizing line endings..." 'Info'
+     Write-Log "Normalizing line endings..." 'Info'
     @("vbr-ks.cfg", "grub.cfg") | ForEach-Object {
         $content = Get-Content $_ -Raw
         $content = $content.Replace("`r`n", "`n")
-        Set-Content $_ $content -NoNewline -Encoding UTF8
-    }
-    
-    if(-not $CFGOnly){
+        Set-Content $_ $content -NoNewline -Encoding utf8
+    } 
+
+      if(-not $CFGOnly){
         Write-Log "Committing changes to ISO..." 'Info'
 
         $commitCommands = @(
@@ -1990,7 +1863,7 @@ try {
     Start-Transcript -Path $logFile -Append
 
     Write-Log "=================================================================================================="
-    Write-Log "Veeam ISO Customization Script - Version 2.4"
+    Write-Log "Veeam ISO Customization Script - Version 2.6"
     Write-Log "=================================================================================================="
 
     if (-not [string]::IsNullOrWhiteSpace($ConfigFile)) {

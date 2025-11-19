@@ -1,6 +1,6 @@
 # Veeam Software Appliance ISO Automation Tool
 
-[![PowerShell](https://img.shields.io/badge/PowerShell-5.1%2B-blue.svg)](https://docs.microsoft.com/en-us/powershell/)
+[![PowerShell](https://img.shields.io/badge/PowerShell-7%2B-blue.svg)](https://docs.microsoft.com/en-us/powershell/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows%2BWSL-lightgrey.svg)](https://docs.microsoft.com/en-us/windows/wsl/)
 [![Veeam](https://img.shields.io/badge/Veeam-v13.0-00B336.svg)](https://www.veeam.com/)
@@ -15,12 +15,16 @@ This advanced PowerShell script automates the customization of Veeam Software Ap
 
 ---
 
+## What's New (v2.6)
+- Now requires PowerShell 7+ 
+- Add Service Provider doesn't require any external tool anymore
+
+
 ## What's New (v2.5)
 
 - Now works with RTM_13.0.1.180_20251101
 - Confirmed with RTM : Add service provider works with SO (no logic added w/o SO yet)
-- Enhanced logics with retry for reliability
-- Restart TTY end of script for reliability
+- Enhanced logics with retry & Restart TTY end of script for reliability
 
 ## What's New (v2.4)
 
@@ -119,10 +123,7 @@ https://www.veeam.com/kb4772
 - Use `NodeExporterDNF` parameters to download & install instead using local folder (requires internet)
 
 **Veeam Service Provider support**
-- download `vcsp` folder from repo with `veeam_requestexternal.sh`, `veeam_sovalidrequest.sh`
 - fill json parameters starting with VCSP
-- download `offline_repo` folder and place it at / of the folder where you run the script
-
 
 **Configuration Restore**
 - download `conf` folder from repo with inside `unattended.xml`, `veeam_addsoconfpw.sh`, and your bco rename to `conftoresto.bco` (hard coded)
@@ -306,13 +307,11 @@ $CustomVBRBlock = @(
 )
 ```
 
-### VCSP Connection (RTM 13.0.1 and above)
+### VCSP Connection (RTM_13.0.1.180_20251101 and above)
 - **VCSP Connection**: Veeam Service service provider integration with credential management & VSPC management agent flag enable
 - (works with optional feature : VBR Tunning to install license)
-- work only with SO for now
-- `veeam_requestexternal.sh` and `veeam_sovalidrequest.sh` are use at first boot, during `veeam-init.sh` to enable analytics on hostmanager before adding the VCSP
-- check `/var/log/veeam_init.log` for progression but also directly named log
-- it install curl and oathtool from offline repo and then removes it
+- check `/var/log/veeam_init.log` for progression
+- If you want to remotly enable analytics, for cloud init for exemple, check VCSP folder for bash script
 
 
 ### CFG files Only
@@ -429,7 +428,7 @@ Process completed successfully
 - [x] Automated Restore Configuration offline ✅ **Completed**
 - [ ] Test Automated Restore Configuration offline with RTM/GA
 - [ ] Add offline repo support for node_exporter instead of binary
-- [ ] Remove curl after install to only keep curl (minimal)
+- [ ] Remove curl after install to only keep curl-minimal (automated conf restore)
 
 
 ## Support
@@ -445,8 +444,8 @@ Process completed successfully
 ## Author & Stats
 
 **Author**: Baptiste TELLIER  
-**Version**: 2.5
-**Creation**: November 12, 2025
+**Version**: 2.6
+**Creation**: November 19, 2025
 
 ![GitHub stars](https://img.shields.io/github/stars/PleXi00/autodeploy)
 ![GitHub forks](https://img.shields.io/github/forks/PleXi00/autodeploy)
