@@ -26,7 +26,6 @@
   "NtpServer": "time.nist.gov",
   "NtpRunSync": "true",
   "NodeExporter": false,
-  "NodeExporterDNF": false,
   "LicenseVBRTune": true,
   "LicenseFile": "Veeam-100instances-entplus-monitoring-nfr.lic",
   "SyslogServer": "",

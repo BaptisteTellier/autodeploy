@@ -26,6 +26,5 @@
   "NtpServer": "time.nist.gov",
   "NtpRunSync": "true",
   "NodeExporter": false,
-  "NodeExporterDNF": false,
   "Debug": false
 }

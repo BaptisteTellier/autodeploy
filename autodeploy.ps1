@@ -171,10 +171,6 @@ Default: "time.nist.gov"
 Boolean flag to enable node_exporter deployment. 
 Default: $false
 
-.PARAMETER NodeExporterDNF
-Boolean flag to enable node_exporter deployment using DNF package manager.
-Default: $false
-
 .PARAMETER LicenseVBRTune
 Boolean flag to enable automatic Veeam license installation. Default: $false
 
@@ -288,7 +284,6 @@ param (
 
     ##### optional features #####
     [bool]$NodeExporter = $false,
-    [bool]$NodeExporterDNF = $false,
     [bool]$LicenseVBRTune = $false,
     [string]$LicenseFile = "Veeam-100instances-entplus-monitoring-nfr.lic",
     [string]$SyslogServer = "",
@@ -490,12 +485,7 @@ function Update-ParametersFromJSON {
         $script:NodeExporter = $Config.NodeExporter
         $parametersUpdated++
     }
-
-    if ($Config.PSObject.Properties['NodeExporterDNF'] -and -not $PSBoundParameters.ContainsKey('NodeExporterDNF')) {
-        $script:NodeExporterDNF = $Config.NodeExporterDNF
-        $parametersUpdated++
-    }
-    
+ 
     if ($Config.PSObject.Properties['LicenseVBRTune'] -and -not $PSBoundParameters.ContainsKey('LicenseVBRTune')) {
         $script:LicenseVBRTune = $Config.LicenseVBRTune
         $parametersUpdated++
@@ -704,11 +694,11 @@ function Get-ModificationSummary {
     $summary += "OPTIONAL FEATURES:"
     $summary += "  Node Exporter Local: $(if ($NodeExporter) { 'Enabled' } else { 'Disabled' })"
     $summary += "  Node Exporter Online: $(if ($NodeExporterDNF) { 'Enabled' } else { 'Disabled' })"
+    $summary += "  Debug: $(if ($ISOInfo.Debug) { 'Enabled' } else { 'Disabled' })"
     if($ApplianceType -eq "VSA"){
     $summary += "  License Auto-Install: $(if ($LicenseVBRTune) { 'Enabled' } else { 'Disabled' })"
     $summary += "  VCSP Connection: $(if ($VCSPConnection) { 'Enabled' } else { 'Disabled' })"
     $summary += "  Restore Config: $(if ($ISOInfo.RestoreConfig) { 'Enabled' } else { 'Disabled' })"
-    $summary += "  Debug: $(if ($ISOInfo.Debug) { 'Enabled' } else { 'Disabled' })"
     }
     $summary += "=================================================================================================="
 
@@ -1081,6 +1071,8 @@ function Get-VeeamHostConfigBlock {
         "echo 'Disabling veeam-init service...'",
         "systemctl disable veeam-init",
         "echo 'OK : Service disabled'",
+        "echo 'removing offline repo /tmp/offline_repo if exists'",
+        "rm /tmp/offline_repo -rf"
         "echo 'Restarting getty services...'",
         "systemctl restart getty@tty1.service",
         "systemctl restart getty@tty2.service",
@@ -1137,6 +1129,33 @@ function Get-NodeExporterDNFBlock {
     )
 }
 
+function Get-NodeExporterOfflineBlock {
+    return @(
+        "log '[1/4] Enabling offline repository...'",
+        "cat << EOF >> /etc/yum.repos.d/local-offline.repo",
+        "[local-offline]",
+        "name=Local Offline Repository for oathtool and curl",
+        "enabled=1",
+        "gpgcheck=0",
+        "baseurl=file:///tmp/offline_repo",
+        "EOF",
+        "log '[2/4] Installing node_exporter from offline repo...'",
+        "dnf clean all --releasever 9",
+        "dnf --disablerepo='*' --enablerepo='local-offline' install -y node_exporter --releasever 9",
+        "log 'node_exporter installation completed'"
+        "log 'removing offline repository /etc/yum.repos.d/local-offline.repo'"
+        "rm -f /etc/yum.repos.d/local-offline.repo"
+
+        "log '[3/4] Configuring /etc/sysconfig/node_exporter ...'",
+        'bash -c ''echo OPTIONS="--web.listen-address=0.0.0.0:9100" > /etc/sysconfig/node_exporter''',
+
+        "log '[4/4] Enabling and starting node_exporter...'",
+        "systemctl daemon-reload",
+        "systemctl enable node_exporter.service",
+        "log 'node_exporter installation completed'"
+    )
+}
+
 function Get-InstalloathtoolOfflineBlock {
     return @(
         "log '[1/2] Enabling offline repository...'",
@@ -1151,8 +1170,8 @@ function Get-InstalloathtoolOfflineBlock {
         "dnf clean all --releasever 9",
         "dnf --disablerepo='*' --enablerepo='local-offline' install -y oathtool curl --releasever 9",
         "log 'oathtool and curl installation completed'"
-        "log 'removing offline repository /tmp/offline_repo'"
-        "rm /tmp/offline_repo -rf"
+        "log 'removing offline repository /etc/yum.repos.d/local-offline.repo'"
+        "rm -f /etc/yum.repos.d/local-offline.repo"
     )
 }
 
@@ -1309,11 +1328,19 @@ function Invoke-VSA {
         Write-Log "File extracted: $_" 'Info'
     }
 
+    #####
+    #GRUB
+    #####
+
     Write-Log "Configuring GRUB bootloader..." 'Info'
     Update-FileContent -FilePath "grub.cfg" -Pattern '^(.*inst.ks=hd:LABEL=VeeamSA:/vbr-ks.cfg quiet.*)$' -Replacement '${1} inst.assumeyes'
     $newDefault = '"Veeam Backup & Replication v13.0>Install - fresh install, wipes everything (including local backups)"'
     Update-FileContent -FilePath "grub.cfg" -Pattern 'set default=.*' -Replacement "set default=$newDefault"
     Update-FileContent -FilePath "grub.cfg" -Pattern 'set timeout=.*' -Replacement "set timeout=$GrubTimeout"
+
+    #####
+    #KSICKSTART
+    #####
 
     Write-Log "Configuring Kickstart file..." 'Info'
     Set-KeyboardLayout -FilePath "vbr-ks.cfg" -Layout $KeyboardLayout
@@ -1328,10 +1355,22 @@ function Invoke-VSA {
     Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine "mkdir -p /var/log/veeam/" -NewLines @("touch /etc/veeam/cockpit_auto_test_disable_init")
 
     Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine 'find /etc/yum.repos.d/ -type f -not -name "*veeam*" -delete' -NewLines (Get-VeeamHostConfigBlock)
+ 
+    #####
+    #Optional Modifications 
+    #####
+
+    #####
+    #SSh modifications for DEBUG mode
+    #####
 
     if ($Debug) {
         Set-DebugSSHModifications -FilePath "vbr-ks.cfg"
     }
+    
+    #####
+    #Restore Configuration
+    #####
     
     if ($RestoreConfig) {
         Write-Log "Adding restore configuration..." 'Info'
@@ -1354,10 +1393,18 @@ function Invoke-VSA {
         }
     }
 
+    #####
+    #VCSP Configuration
+    #####
+
     if ($VCSPConnection) {
         Write-Log "Adding VCSP configuration..." 'Info'
         Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine "/opt/veeam/hostmanager/veeamhostmanager --apply_init_config /etc/veeam/vbr_init.cfg" -NewLines (Get-CustomVCSPBlock3)
     }
+
+    #####
+    #VBR License Configuration
+    #####
 
     if ($LicenseVBRTune) {
         Write-Log "Adding license configuration..." 'Info'
@@ -1371,24 +1418,26 @@ function Invoke-VSA {
         }
     }
 
+    #####
+    #Node Exporter Configuration
+    #####
+
     if ($NodeExporter) {
         Write-Log "Adding node_exporter configuration..." 'Info'
-        Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine 'dnf install -y --nogpgcheck --disablerepo="*" /tmp/static-packages/*.rpm' -NewLines (Get-NodeExporterSetupBlock)
-        Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine "/usr/bin/cp -rv /tmp/*.* /mnt/sysimage/var/log/appliance-installation-logs/" -NewLines (Get-CopyNodeExporterBlock)
+        Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine "/usr/bin/cp -rv /tmp/*.* /mnt/sysimage/var/log/appliance-installation-logs/" -NewLines (Get-OfflineRepoFileCopyBlock)
+        Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine "/usr/bin/cp -rv /tmp/*.* /mnt/sysimage/var/log/appliance-installation-logs/" -NewLines (Get-NodeExporterOfflineBlock)
         Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine "/opt/veeam/hostmanager/veeamhostmanager --apply_init_config /etc/veeam/vbr_init.cfg" -NewLines (Get-NodeExporterFirewallBlock)
         if(-not $CFGOnly){
-            if (Test-Path "node_exporter") {
-                $nodeCmd = "wsl xorriso -boot_image any keep -dev `"$($isoInfo.TargetISO)`" -map node_exporter /node_exporter"
-                Invoke-WSLCommand -Command $nodeCmd -Description "Add node_exporter folder to ISO" | Out-Null
+            if (Test-Path "offline_repo") {
+                $confCmd = "wsl xorriso -boot_image any keep -dev `"$($isoInfo.TargetISO)`" -map offline_repo /offline_repo"
+                Invoke-WSLCommand -Command $confCmd -Description "Add offline_repo folder to ISO" | Out-Null
             }
         }
-    }
+    } 
 
-    if ($NodeExporterDNF){
-        Write-Log "Adding node_exporter with DNF configuration..." 'Info'
-        Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine 'dnf install -y --nogpgcheck --disablerepo="*" /tmp/static-packages/*.rpm' -NewLines (Get-NodeExporterDNFBlock)
-        Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine "/opt/veeam/hostmanager/veeamhostmanager --apply_init_config /etc/veeam/vbr_init.cfg" -NewLines (Get-NodeExporterFirewallBlock)
-    }
+    #####
+    ##Normalize line endings & commit changes to ISO
+    #####
 
      Write-Log "Normalizing line endings..." 'Info'
     @("vbr-ks.cfg", "grub.cfg") | ForEach-Object {
@@ -1520,23 +1569,26 @@ function Invoke-VIA {
 
     Add-ContentAfterLine -FilePath "$CFGname" -TargetLine 'find /etc/yum.repos.d/ -type f -not -name "*veeam*" -delete' -NewLines (Get-VeeamHostConfigBlock)
 
-     if ($NodeExporter) {
+    if ($Debug) {
+        Set-DebugSSHModifications -FilePath "$CFGname"
+    }
+
+    #####
+    #Node Exporter Configuration
+    #####
+
+    if ($NodeExporter) {
         Write-Log "Adding node_exporter configuration..." 'Info'
-        Add-ContentAfterLine -FilePath "$CFGname" -TargetLine 'dnf install -y --nogpgcheck --disablerepo="*" /tmp/static-packages/*.rpm' -NewLines (Get-NodeExporterSetupBlock)
-        Add-ContentAfterLine -FilePath "$CFGname" -TargetLine "/usr/bin/cp -rv /tmp/*.* /mnt/sysimage/var/log/appliance-installation-logs/" -NewLines (Get-CopyNodeExporterBlock)
-        Add-ContentAfterLine -FilePath "$CFGname" -TargetLine "/opt/veeam/hostmanager/veeamhostmanager --apply_init_config /etc/veeam/vbr_init.cfg" -NewLines (Get-NodeExporterFirewallBlock)
-
-        if (Test-Path "node_exporter") {
-            $nodeCmd = "wsl xorriso -boot_image any keep -dev `"$($isoInfo.TargetISO)`" -map node_exporter /node_exporter"
-            Invoke-WSLCommand -Command $nodeCmd -Description "Add node_exporter folder to ISO" | Out-Null
+        Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine "/usr/bin/cp -rv /tmp/*.* /mnt/sysimage/var/log/appliance-installation-logs/" -NewLines (Get-OfflineRepoFileCopyBlock)
+        Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine "/usr/bin/cp -rv /tmp/*.* /mnt/sysimage/var/log/appliance-installation-logs/" -NewLines (Get-NodeExporterOfflineBlock)
+        Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine "/opt/veeam/hostmanager/veeamhostmanager --apply_init_config /etc/veeam/vbr_init.cfg" -NewLines (Get-NodeExporterFirewallBlock)
+        if(-not $CFGOnly){
+            if (Test-Path "offline_repo") {
+                $confCmd = "wsl xorriso -boot_image any keep -dev `"$($isoInfo.TargetISO)`" -map offline_repo /offline_repo"
+                Invoke-WSLCommand -Command $confCmd -Description "Add offline_repo folder to ISO" | Out-Null
+            }
         }
-    }
-
-    if ($NodeExporterDNF){
-        Write-Log "Adding node_exporter with DNF configuration..." 'Info'
-        Add-ContentAfterLine -FilePath "$CFGname" -TargetLine 'dnf install -y --nogpgcheck --disablerepo="*" /tmp/static-packages/*.rpm' -NewLines (Get-NodeExporterDNFBlock)
-        Add-ContentAfterLine -FilePath "$CFGname" -TargetLine "/opt/veeam/hostmanager/veeamhostmanager --apply_init_config /etc/veeam/vbr_init.cfg" -NewLines (Get-NodeExporterFirewallBlock)
-    }
+    } 
 
     Write-Log "Normalizing line endings..." 'Info'
     @("$CFGname", "grub.cfg") | ForEach-Object {
@@ -1663,23 +1715,22 @@ function Invoke-VIAVMware {
 
     Add-ContentAfterLine -FilePath "$CFGname" -TargetLine 'find /etc/yum.repos.d/ -type f -not -name "*veeam*" -delete' -NewLines (Get-VeeamHostConfigBlock)
 
-     if ($NodeExporter) {
+    if ($Debug) {
+        Set-DebugSSHModifications -FilePath "$CFGname"
+    }
+
+    if ($NodeExporter) {
         Write-Log "Adding node_exporter configuration..." 'Info'
-        Add-ContentAfterLine -FilePath "$CFGname" -TargetLine 'dnf install -y --nogpgcheck --disablerepo="*" /tmp/static-packages/*.rpm' -NewLines (Get-NodeExporterSetupBlock)
-        Add-ContentAfterLine -FilePath "$CFGname" -TargetLine "/usr/bin/cp -rv /tmp/*.* /mnt/sysimage/var/log/appliance-installation-logs/" -NewLines (Get-CopyNodeExporterBlock)
-        Add-ContentAfterLine -FilePath "$CFGname" -TargetLine "/opt/veeam/hostmanager/veeamhostmanager --apply_init_config /etc/veeam/vbr_init.cfg" -NewLines (Get-NodeExporterFirewallBlock)
-
-        if (Test-Path "node_exporter") {
-            $nodeCmd = "wsl xorriso -boot_image any keep -dev `"$($isoInfo.TargetISO)`" -map node_exporter /node_exporter"
-            Invoke-WSLCommand -Command $nodeCmd -Description "Add node_exporter folder to ISO" | Out-Null
+        Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine "/usr/bin/cp -rv /tmp/*.* /mnt/sysimage/var/log/appliance-installation-logs/" -NewLines (Get-OfflineRepoFileCopyBlock)
+        Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine "/usr/bin/cp -rv /tmp/*.* /mnt/sysimage/var/log/appliance-installation-logs/" -NewLines (Get-NodeExporterOfflineBlock)
+        Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine "/opt/veeam/hostmanager/veeamhostmanager --apply_init_config /etc/veeam/vbr_init.cfg" -NewLines (Get-NodeExporterFirewallBlock)
+        if(-not $CFGOnly){
+            if (Test-Path "offline_repo") {
+                $confCmd = "wsl xorriso -boot_image any keep -dev `"$($isoInfo.TargetISO)`" -map offline_repo /offline_repo"
+                Invoke-WSLCommand -Command $confCmd -Description "Add offline_repo folder to ISO" | Out-Null
+            }
         }
-    }
-
-    if ($NodeExporterDNF){
-        Write-Log "Adding node_exporter with DNF configuration..." 'Info'
-        Add-ContentAfterLine -FilePath "$CFGname" -TargetLine 'dnf install -y --nogpgcheck --disablerepo="*" /tmp/static-packages/*.rpm' -NewLines (Get-NodeExporterDNFBlock)
-        Add-ContentAfterLine -FilePath "$CFGname" -TargetLine "/opt/veeam/hostmanager/veeamhostmanager --apply_init_config /etc/veeam/vbr_init.cfg" -NewLines (Get-NodeExporterFirewallBlock)
-    }
+    } 
 
     Write-Log "Normalizing line endings..." 'Info'
     @("$CFGname", "grub.cfg") | ForEach-Object {
@@ -1805,6 +1856,23 @@ function Invoke-VIAHR {
     Add-ContentAfterLine -FilePath "$CFGname" -TargetLine "mkdir -p /var/log/veeam/" -NewLines @("touch /etc/veeam/cockpit_auto_test_disable_init")
 
     Add-ContentAfterLine -FilePath "$CFGname" -TargetLine 'find /etc/yum.repos.d/ -type f -not -name "*veeam*" -delete' -NewLines (Get-VeeamHostConfigBlock)
+
+    if ($Debug) {
+        Set-DebugSSHModifications -FilePath "$CFGname"
+    }
+
+        if ($NodeExporter) {
+        Write-Log "Adding node_exporter configuration..." 'Info'
+        Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine "/usr/bin/cp -rv /tmp/*.* /mnt/sysimage/var/log/appliance-installation-logs/" -NewLines (Get-OfflineRepoFileCopyBlock)
+        Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine "/usr/bin/cp -rv /tmp/*.* /mnt/sysimage/var/log/appliance-installation-logs/" -NewLines (Get-NodeExporterOfflineBlock)
+        Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine "/opt/veeam/hostmanager/veeamhostmanager --apply_init_config /etc/veeam/vbr_init.cfg" -NewLines (Get-NodeExporterFirewallBlock)
+        if(-not $CFGOnly){
+            if (Test-Path "offline_repo") {
+                $confCmd = "wsl xorriso -boot_image any keep -dev `"$($isoInfo.TargetISO)`" -map offline_repo /offline_repo"
+                Invoke-WSLCommand -Command $confCmd -Description "Add offline_repo folder to ISO" | Out-Null
+            }
+        }
+    } 
 
     Write-Log "Normalizing line endings..." 'Info'
     @("$CFGname", "grub.cfg") | ForEach-Object {

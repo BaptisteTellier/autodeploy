@@ -18,6 +18,8 @@ This advanced PowerShell script automates the customization of Veeam Software Ap
 ## What's New (v2.6)
 - Now requires PowerShell 7+ 
 - Add Service Provider doesn't require any external tool anymore
+- Node_Exporter install use offline_repo
+- debug works for all VIA
 
 
 ## What's New (v2.5)
@@ -84,7 +86,7 @@ https://www.veeam.com/kb4772
 
 ### System Requirements
 - **Operating System**: Windows 10/11 or Windows Server 2016+
-- **PowerShell**: Version 5.1 or higher
+- **PowerShell**: Version 7 or higher
 - **WSL**: Windows Subsystem for Linux (Ubuntu/Debian recommended)
 - **Memory**: Minimum 4GB RAM (8GB recommended for large ISOs)
 - **Storage**: At least 14GB free space for ISO manipulation
@@ -92,21 +94,21 @@ https://www.veeam.com/kb4772
 ### Software Dependencies
 **Software dependencies:**
 - `xorriso` installed in WSL
-    `
+    ```
     sudo apt-get update
     sudo apt-get install xorriso
-    `
+    ```
 - For RHEL/CentOS/Rocky:
-    `
+    ```
     sudo yum install xorriso
-    `
+    ```
 
 **PowerShell configuration:**
 - Run with an appropriate execution policy
 - Confirm WSL is accessible:
-    `
+    ```
     wsl --version
-    `
+    ```
 
 ### Optionnal Dependencies
 **VBR tunning : License file**
@@ -115,12 +117,8 @@ https://www.veeam.com/kb4772
 - `LicenseVBRTune` set to `$true`
 
 **node_exporter**
-- `node_exporter` folder at / of the folder where you run the script
-- `LICENSE + node_exporter + NOTICE` inside the folder
-- Where `node_exporter` is the uncompressed binary downloaded from offical repo
-- Warning : “fapolicyd” disallow execution of random binary – might not work in the future. Need to add node_exporter repository and rpm file installation instead
+- copy offline_repo in the same folder you execut the script
 - Might not work on VIA - Hardened Repository (not tested)
-- Use `NodeExporterDNF` parameters to download & install instead using local folder (requires internet)
 
 **Veeam Service Provider support**
 - fill json parameters starting with VCSP
@@ -168,7 +166,6 @@ https://www.veeam.com/kb4772
     "NtpServer": "time.nist.gov",
     "NtpRunSync": "true",
     "NodeExporter": false,
-    "NodeExporterDNF": false,
     "LicenseVBRTune": false,
     "LicenseFile": "Veeam-100instances-entplus-monitoring-nfr.lic",
     "SyslogServer": "",
@@ -240,7 +237,6 @@ https://www.veeam.com/kb4772
 | Parameter           | Type    | Description                      | Default                                   |
 |---------------------|---------|----------------------------------|-------------------------------------------|
 | NodeExporter        | Bool    | Deploy Prometheus node_exporter Local folder required | false                |
-| NodeExporterDNF     | Bool    | Deploy Prometheus node_exporter Online required | false                      |
 | LicenseVBRTune      | Bool    | Auto-install Veeam license (only VSA) | false                                |
 | LicenseFile         | String  | License filename                 | Veeam-100instances-entplus-monitoring-nfr.lic |
 | SyslogServer        | String  | Syslog server IP                 | ""                                        |
@@ -286,9 +282,8 @@ https://www.veeam.com/kb4772
 ## How Optional Feature works :
 
 ### Node_Exporter
-The script automatically creates systemd services for:
+The script install node_exporter from offline repo
 - Prometheus monitoring with firewall configuration 9100
-- if you use DNF json parameters, it will download and install node_exporter from online repo
 
 ### VBR Tunning
 - **License Installation**: Automated license deployment and activation
@@ -427,7 +422,7 @@ Process completed successfully
 - [x] Automated Restore Configuration ✅ **Completed**
 - [x] Automated Restore Configuration offline ✅ **Completed**
 - [ ] Test Automated Restore Configuration offline with RTM/GA
-- [ ] Add offline repo support for node_exporter instead of binary
+- [x] Add offline repo support for node_exporter instead of binary ✅ **Completed**
 - [ ] Remove curl after install to only keep curl-minimal (automated conf restore)
 
 
@@ -445,7 +440,7 @@ Process completed successfully
 
 **Author**: Baptiste TELLIER  
 **Version**: 2.6
-**Creation**: November 19, 2025
+**Creation**: November 23, 2025
 
 ![GitHub stars](https://img.shields.io/github/stars/PleXi00/autodeploy)
 ![GitHub forks](https://img.shields.io/github/forks/PleXi00/autodeploy)
