@@ -985,49 +985,6 @@ function Get-CopyLicenseBlock {
     )
 }
 
-function Get-CopyNodeExporterBlock {
-    return @(
-        "# Copy node_exporter files to OS",
-        "log 'starting node_exporter files copy'",
-        "mkdir -p /mnt/sysimage/etc/node_exporter",
-        "if [ -d /mnt/install/repo/node_exporter ]; then",
-        "    cp -r /mnt/install/repo/node_exporter /mnt/sysimage/etc/",
-        "fi",
-        "log 'node_exporter files copy completed'"
-    )
-}
-
-function Get-NodeExporterSetupBlock {
-    return @(
-        "# Setup node_exporter service",
-        "log 'starting node_exporter installation'",
-        "groupadd -f node_exporter",
-        "useradd -g node_exporter --no-create-home --shell /bin/false node_exporter",
-        "chown node_exporter:node_exporter /etc/node_exporter",
-        "cat << EOF >> /etc/systemd/system/node_exporter.service",
-        "[Unit]",
-        "Description=Node Exporter",
-        "Documentation=https://prometheus.io/docs/guides/node-exporter/",
-        "Wants=network-online.target",
-        "After=network-online.target",
-        "",
-        "[Service]",
-        "User=node_exporter",
-        "Group=node_exporter",
-        "Type=simple",
-        "Restart=on-failure",
-        "ExecStart=/etc/node_exporter/node_exporter --web.listen-address=:9100",
-        "",
-        "[Install]",
-        "WantedBy=multi-user.target",
-        "EOF",
-        "chmod 664 /etc/systemd/system/node_exporter.service",
-        "systemctl daemon-reload",
-        "systemctl enable node_exporter.service",
-        "log 'node_exporter installation completed'"
-    )
-}
-
 function Get-NodeExporterFirewallBlock {
     return @(
         "echo 'Configure firewall for node_exporter'",
@@ -1568,7 +1525,13 @@ function Invoke-VIA {
     Add-ContentAfterLine -FilePath "$CFGname" -TargetLine "mkdir -p /var/log/veeam/" -NewLines @("touch /etc/veeam/cockpit_auto_test_disable_init")
 
     Add-ContentAfterLine -FilePath "$CFGname" -TargetLine 'find /etc/yum.repos.d/ -type f -not -name "*veeam*" -delete' -NewLines (Get-VeeamHostConfigBlock)
+    #####
+    #Optional Modifications 
+    #####
 
+    #####
+    #SSh modifications for DEBUG mode
+    #####
     if ($Debug) {
         Set-DebugSSHModifications -FilePath "$CFGname"
     }
@@ -1714,7 +1677,13 @@ function Invoke-VIAVMware {
     Add-ContentAfterLine -FilePath "$CFGname" -TargetLine "mkdir -p /var/log/veeam/" -NewLines @("touch /etc/veeam/cockpit_auto_test_disable_init")
 
     Add-ContentAfterLine -FilePath "$CFGname" -TargetLine 'find /etc/yum.repos.d/ -type f -not -name "*veeam*" -delete' -NewLines (Get-VeeamHostConfigBlock)
+    #####
+    #Optional Modifications 
+    #####
 
+    #####
+    #SSh modifications for DEBUG mode
+    #####
     if ($Debug) {
         Set-DebugSSHModifications -FilePath "$CFGname"
     }
@@ -1856,7 +1825,15 @@ function Invoke-VIAHR {
     Add-ContentAfterLine -FilePath "$CFGname" -TargetLine "mkdir -p /var/log/veeam/" -NewLines @("touch /etc/veeam/cockpit_auto_test_disable_init")
 
     Add-ContentAfterLine -FilePath "$CFGname" -TargetLine 'find /etc/yum.repos.d/ -type f -not -name "*veeam*" -delete' -NewLines (Get-VeeamHostConfigBlock)
+    ### 2.6 fix - hardened repo secret token not pairing automaticly
+    Add-ContentAfterLine -FilePath "$CFGname" -TargetLine '/opt/veeam/hostmanager/veeamhostmanager --apply_init_config /etc/veeam/vbr_init.cfg' -NewLines ('export VEEAM_SECRETTOKEN="000000" && /opt/veeam/deployment/veeamdeploymentsvc --start-pairing --timeout -1')
+    #####
+    #Optional Modifications 
+    #####
 
+    #####
+    #SSh modifications for DEBUG mode
+    #####
     if ($Debug) {
         Set-DebugSSHModifications -FilePath "$CFGname"
     }

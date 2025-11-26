@@ -20,6 +20,7 @@ This advanced PowerShell script automates the customization of Veeam Software Ap
 - Add Service Provider doesn't require any external tool anymore
 - Node_Exporter install use offline_repo
 - debug works for all VIA
+- 2.6.1 : fixed issue - hardened repo not pairing automatically
 
 
 ## What's New (v2.5)
