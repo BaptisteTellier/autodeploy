@@ -12,7 +12,7 @@ Baptiste TELLIER
 .COPYRIGHT
 Copyright (c) 2025 Baptiste TELLIER
 
-.VERSION 2.6
+.VERSION 2.6.1
 
 .DESCRIPTION
 This PowerShell script provides automation for customizing Veeam Appliance ISO files to enable fully automated, unattended installations.
@@ -206,9 +206,9 @@ Using JSON configuration file with VSA appliance (Recommended)
 File Name      : autodeploy.ps1
 Author         : Baptiste TELLIER
 Prerequisite   : PowerShell 7+, WSL with xorriso installed
-Version        : 2.6
+Version        : 2.6.1
 Creation Date  : 24/09/2025
-Last Modified  : 19/11/2025
+Last Modified  : 26/11/2025
 
 REQUIREMENTS:
 - Windows Subsystem for Linux (WSL) with xorriso package installed
@@ -1825,7 +1825,7 @@ function Invoke-VIAHR {
     Add-ContentAfterLine -FilePath "$CFGname" -TargetLine "mkdir -p /var/log/veeam/" -NewLines @("touch /etc/veeam/cockpit_auto_test_disable_init")
 
     Add-ContentAfterLine -FilePath "$CFGname" -TargetLine 'find /etc/yum.repos.d/ -type f -not -name "*veeam*" -delete' -NewLines (Get-VeeamHostConfigBlock)
-    ### 2.6 fix - hardened repo secret token not pairing automaticly
+    ### 2.6.1 fix - hardened repo secret token not pairing automaticly
     Add-ContentAfterLine -FilePath "$CFGname" -TargetLine '/opt/veeam/hostmanager/veeamhostmanager --apply_init_config /etc/veeam/vbr_init.cfg' -NewLines ('export VEEAM_SECRETTOKEN="000000" && /opt/veeam/deployment/veeamdeploymentsvc --start-pairing --timeout -1')
     #####
     #Optional Modifications 
@@ -1908,7 +1908,7 @@ try {
     Start-Transcript -Path $logFile -Append
 
     Write-Log "=================================================================================================="
-    Write-Log "Veeam ISO Customization Script - Version 2.6"
+    Write-Log "Veeam ISO Customization Script - Version 2.6.1"
     Write-Log "=================================================================================================="
 
     if (-not [string]::IsNullOrWhiteSpace($ConfigFile)) {
