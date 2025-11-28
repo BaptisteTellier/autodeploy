@@ -20,8 +20,8 @@ This advanced PowerShell script automates the customization of Veeam Software Ap
 - Add Service Provider doesn't require any external tool anymore
 - Node_Exporter install use offline_repo
 - debug works for all VIA
-- 2.6.1 : fixed issue - hardened repo not pairing automatically
-
+- 2.6.1 : fixed issue - hardened repo not pairing automatically after deployment 
+- 2.6.2 : fixed issue - official updater repo re-enablement after being disabled by offline repo (node exporter & restore conf)
 
 ## What's New (v2.5)
 
@@ -237,7 +237,7 @@ https://www.veeam.com/kb4772
 
 | Parameter           | Type    | Description                      | Default                                   |
 |---------------------|---------|----------------------------------|-------------------------------------------|
-| NodeExporter        | Bool    | Deploy Prometheus node_exporter Local folder required | false                |
+| NodeExporter        | Bool    | Deploy Prometheus node_exporter - offline_repo folder required | false                |
 | LicenseVBRTune      | Bool    | Auto-install Veeam license (only VSA) | false                                |
 | LicenseFile         | String  | License filename                 | Veeam-100instances-entplus-monitoring-nfr.lic |
 | SyslogServer        | String  | Syslog server IP                 | ""                                        |
@@ -338,14 +338,14 @@ Step 5/5: Final verification
 Final verification successful
 Process completed successfully
 ```
-- install curl and oathtool from offline repo and then removes it
+- install curl and oathtool from offline repo and then removes oathtool
 
 ---
 
 ## Known issues
 - If you enable NtpRunSync and it fails, customization fails
 - Using static IP doesn't set DNS properly : BUG in VSA, will be fix by Veeam. **Workaround :** DHCP or Enter Network in TUI parameter and Apply
-- If it boots on the init wizard but it's already fully configured and you cannot go through. Check `/var/log/veeam_init.log` something went wrong. **Workaround :** Reinstall
+- If it boots on the init wizard but it's already fully configured and you cannot go through. wait 2-3min. Then check `/var/log/veeam_init.log` (ctrl+alt+F2-F3 etc... to change TTY ) - something went wrong. **Workaround :** Reinstall
 
 ## Troubleshooting
 
@@ -358,7 +358,7 @@ Process completed successfully
 - Use correct JSON structure with all parameters
 - You **cannot override** parameters in CLI if you use JSON
 - If you use optionnal features: check prerequisite and folder structure
-- Use `$CFGOnly=$true` to verify your kickstart file contain all Configurations Blocks
+- Use `$CFGOnly=true` to verify your kickstart file contain all Configurations Blocks
 - Check log file `ISO_Customization.log` for timestamped error messages
 - to browse ISO with WSL xorriso `wsl xorriso -indev "VeeamSoftwareAppliance_13.0.0.4967_20250822.iso" -ls /`
 
@@ -440,8 +440,8 @@ Process completed successfully
 ## Author & Stats
 
 **Author**: Baptiste TELLIER  
-**Version**: 2.6
-**Creation**: November 23, 2025
+**Version**: 2.6.2
+**Creation**: November 28, 2025
 
 ![GitHub stars](https://img.shields.io/github/stars/PleXi00/autodeploy)
 ![GitHub forks](https://img.shields.io/github/forks/PleXi00/autodeploy)

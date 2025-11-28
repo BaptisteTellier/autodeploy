@@ -12,7 +12,7 @@ Baptiste TELLIER
 .COPYRIGHT
 Copyright (c) 2025 Baptiste TELLIER
 
-.VERSION 2.6.1
+.VERSION 2.6.2
 
 .DESCRIPTION
 This PowerShell script provides automation for customizing Veeam Appliance ISO files to enable fully automated, unattended installations.
@@ -692,8 +692,7 @@ function Get-ModificationSummary {
 
     $summary += ""
     $summary += "OPTIONAL FEATURES:"
-    $summary += "  Node Exporter Local: $(if ($NodeExporter) { 'Enabled' } else { 'Disabled' })"
-    $summary += "  Node Exporter Online: $(if ($NodeExporterDNF) { 'Enabled' } else { 'Disabled' })"
+    $summary += "  Node Exporter: $(if ($NodeExporter) { 'Enabled' } else { 'Disabled' })"
     $summary += "  Debug: $(if ($ISOInfo.Debug) { 'Enabled' } else { 'Disabled' })"
     if($ApplianceType -eq "VSA"){
     $summary += "  License Auto-Install: $(if ($LicenseVBRTune) { 'Enabled' } else { 'Disabled' })"
@@ -1063,31 +1062,9 @@ function Get-VeeamHostConfigBlock {
     )
 }
 
-function Get-NodeExporterDNFBlock {
-    return @(
-        "log '[1/4] Enabling Rocky Linux repos and EPEL...'",
-        "rpm -q epel-release &>/dev/null || rpm -Uvh https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm",
-        "dnf clean all && dnf -y makecache",
-        "dnf -y install dnf-plugins-core || true",
-        "dnf -y config-manager --set-enabled crb || true",
-        "dnf -y install epel-release",
-        "dnf -y makecache",
-
-        "log '[2/4] Installing node_exporter...'",
-        "dnf -y install node_exporter",
-
-        "log '[3/4] Configuring /etc/sysconfig/node_exporter ...'",
-        'bash -c ''echo OPTIONS="--web.listen-address=0.0.0.0:9100" > /etc/sysconfig/node_exporter''',
-
-        "log '[4/4] Enabling and starting node_exporter...'",
-        "systemctl daemon-reload",
-        "systemctl enable node_exporter.service",
-        "log 'node_exporter installation completed'"
-    )
-}
-
 function Get-NodeExporterOfflineBlock {
     return @(
+        "# Install node_exporter from offline repo",
         "log '[1/4] Enabling offline repository...'",
         "cat << EOF >> /etc/yum.repos.d/local-offline.repo",
         "[local-offline]",
@@ -1099,9 +1076,11 @@ function Get-NodeExporterOfflineBlock {
         "log '[2/4] Installing node_exporter from offline repo...'",
         "dnf clean all --releasever 9",
         "dnf --disablerepo='*' --enablerepo='local-offline' install -y node_exporter --releasever 9",
-        "log 'node_exporter installation completed'"
-        "log 'removing offline repository /etc/yum.repos.d/local-offline.repo'"
-        "rm -f /etc/yum.repos.d/local-offline.repo"
+        "log 'node_exporter installation completed'",
+        "log 'removing offline repository /etc/yum.repos.d/local-offline.repo'",
+        "rm -f /etc/yum.repos.d/local-offline.repo",
+        "dnf clean all",
+        "dnf config-manager --set-enabled '*'",
 
         "log '[3/4] Configuring /etc/sysconfig/node_exporter ...'",
         'bash -c ''echo OPTIONS="--web.listen-address=0.0.0.0:9100" > /etc/sysconfig/node_exporter''',
@@ -1126,9 +1105,10 @@ function Get-InstalloathtoolOfflineBlock {
         "log '[2/2] Installing oathtool and curl from RPMs...'",
         "dnf clean all --releasever 9",
         "dnf --disablerepo='*' --enablerepo='local-offline' install -y oathtool curl --releasever 9",
-        "log 'oathtool and curl installation completed'"
-        "log 'removing offline repository /etc/yum.repos.d/local-offline.repo'"
-        "rm -f /etc/yum.repos.d/local-offline.repo"
+        "log 'oathtool and curl installation completed'",
+        "log 'removing offline repository /etc/yum.repos.d/local-offline.repo'",
+        "rm -f /etc/yum.repos.d/local-offline.repo",
+        "dnf config-manager --set-enabled '*'"
     )
 }
 
@@ -1225,6 +1205,7 @@ function Get-RestoreFileCopyBlock {
 
 function Get-OfflineRepoFileCopyBlock {
     return @(
+        "# Copy Offline Repo files",
         "log 'starting offline repo copy'",
         "cp -fr /mnt/install/repo/offline_repo /mnt/sysimage/tmp/offline_repo",
         "log 'copy offline repo completed'"
@@ -1382,8 +1363,11 @@ function Invoke-VSA {
     if ($NodeExporter) {
         Write-Log "Adding node_exporter configuration..." 'Info'
         Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine "/usr/bin/cp -rv /tmp/*.* /mnt/sysimage/var/log/appliance-installation-logs/" -NewLines (Get-OfflineRepoFileCopyBlock)
-        Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine "/usr/bin/cp -rv /tmp/*.* /mnt/sysimage/var/log/appliance-installation-logs/" -NewLines (Get-NodeExporterOfflineBlock)
+
         Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine "/opt/veeam/hostmanager/veeamhostmanager --apply_init_config /etc/veeam/vbr_init.cfg" -NewLines (Get-NodeExporterFirewallBlock)
+
+        Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine "dnf install -y --nogpgcheck --disablerepo="*" /tmp/static-packages/*.rpm" -NewLines (Get-NodeExporterOfflineBlock)
+
         if(-not $CFGOnly){
             if (Test-Path "offline_repo") {
                 $confCmd = "wsl xorriso -boot_image any keep -dev `"$($isoInfo.TargetISO)`" -map offline_repo /offline_repo"
@@ -1908,7 +1892,7 @@ try {
     Start-Transcript -Path $logFile -Append
 
     Write-Log "=================================================================================================="
-    Write-Log "Veeam ISO Customization Script - Version 2.6.1"
+    Write-Log "Veeam ISO Customization Script - Version 2.6.2"
     Write-Log "=================================================================================================="
 
     if (-not [string]::IsNullOrWhiteSpace($ConfigFile)) {
