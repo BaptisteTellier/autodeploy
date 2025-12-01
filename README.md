@@ -12,7 +12,7 @@
 This advanced PowerShell script automates the customization of Veeam Software Appliance ISO files, enabling fully automated, unattended appliance deployments with enterprise-grade, reusable configurations. It supports JSON configuration loading, out-of-place ISO modification, advanced logging, and optional IS backup creation. Network, security, and monitoring details can be configured to fit enterprise environments.
 
 - Tested on build 13.0.0.4967_20250822 & 13.0.1.180_20251101
-
+- For Auto-Deployment PowerShell Exemple : [Powershell Folder](https://github.com/BaptisteTellier/autodeploy/tree/main/powershell)
 ---
 
 ## What's New (v2.6)
@@ -186,6 +186,11 @@ https://www.veeam.com/kb4772
     `
     .\autodeploy.ps1 -ConfigFile "production-config.json"
     `
+4. See [Powershell Folder](https://github.com/BaptisteTellier/autodeploy/tree/main/powershell) for Auto-Deployment PowerShell Exemple :
+
+- Create-ISO.ps1 - Generates multiple bootable ISO images for Veeam appliances ( VSA + VIA Proxy + VIA Hardened Repository )
+- AutoProvisionning.ps1 - Add ISO to VMs, change boot order to DVD-ROM and starts Hyper-V VMs
+- Install-VeeamInfra.ps1 - Configures Veeam infrastructure components (VIA Proxy + VIA Hardened Repository)
 
 ---
 
