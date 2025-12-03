@@ -12,7 +12,8 @@
 This advanced PowerShell script automates the customization of Veeam Software Appliance ISO files, enabling fully automated, unattended appliance deployments with enterprise-grade, reusable configurations. It supports JSON configuration loading, out-of-place ISO modification, advanced logging, and optional IS backup creation. Network, security, and monitoring details can be configured to fit enterprise environments.
 
 - Tested on build 13.0.0.4967_20250822 & 13.0.1.180_20251101
-- For Auto-Deployment PowerShell Exemple : [Powershell Folder](https://github.com/BaptisteTellier/autodeploy/tree/main/powershell)
+- For Auto-Deployment PowerShell exemple : [Powershell Folder](https://github.com/BaptisteTellier/autodeploy/tree/main/powershell)
+- For Packer remote kickstart exemple : [Packer Folder](https://github.com/BaptisteTellier/autodeploy/tree/main/packer)
 ---
 
 ## What's New (v2.6)
