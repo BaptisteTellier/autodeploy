@@ -14,6 +14,7 @@ This advanced PowerShell script automates the customization of Veeam Software Ap
 - Tested on build 13.0.0.4967_20250822 & 13.0.1.180_20251101
 - For Auto-Deployment PowerShell exemple : [Powershell Folder](https://github.com/BaptisteTellier/autodeploy/tree/main/powershell)
 - For Packer remote kickstart exemple : [Packer Folder](https://github.com/BaptisteTellier/autodeploy/tree/main/packer)
+- Youtube video - French audi with Eng Sub : [Part 1](https://www.youtube.com/watch?v=Ri877QyX6i8) [Part 2](https://www.youtube.com/watch?v=fIvcHSPhUUM) [Part 3](https://www.youtube.com/watch?v=MwQcrLufKDU) [Part 4](https://www.youtube.com/watch?v=O56TzfvDNT0) [Part 5](https://www.youtube.com/watch?v=-LA9wKzujyA)
 ---
 
 ## What's New (v2.6)
