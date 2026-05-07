@@ -1,6 +1,6 @@
 # Veeam Software Appliance ISO Automation Tool
 
-[![PowerShell](https://img.shields.io/badge/PowerShell-5.1%2B-blue.svg)](https://docs.microsoft.com/en-us/powershell/)
+[![PowerShell](https://img.shields.io/badge/PowerShell-7%2B-blue.svg)](https://docs.microsoft.com/en-us/powershell/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows%2BWSL-lightgrey.svg)](https://docs.microsoft.com/en-us/windows/wsl/)
 [![Veeam](https://img.shields.io/badge/Veeam-v13.0-00B336.svg)](https://www.veeam.com/)
@@ -12,15 +12,31 @@
 This advanced PowerShell script automates the customization of Veeam Software Appliance ISO files, enabling fully automated, unattended appliance deployments with enterprise-grade, reusable configurations. It supports JSON configuration loading, out-of-place ISO modification, advanced logging, and optional IS backup creation. Network, security, and monitoring details can be configured to fit enterprise environments.
 
 - Tested on build 13.0.0.4967_20250822 & 13.0.1.180_20251101
-
+- For Auto-Deployment PowerShell exemple : [Powershell Folder](https://github.com/BaptisteTellier/autodeploy/tree/main/powershell)
+- For Packer remote kickstart exemple : [Packer Folder](https://github.com/BaptisteTellier/autodeploy/tree/main/packer)
+- Youtube video - French audi with Eng Sub : [Part 1](https://www.youtube.com/watch?v=Ri877QyX6i8) [Part 2](https://www.youtube.com/watch?v=fIvcHSPhUUM) [Part 3](https://www.youtube.com/watch?v=MwQcrLufKDU) [Part 4](https://www.youtube.com/watch?v=O56TzfvDNT0) [Part 5](https://www.youtube.com/watch?v=-LA9wKzujyA)
 ---
+
+## What's New (v2.7)
+- **JSON-only mode (BREAKING)**: `-ConfigFile` is now the only CLI argument; all other settings MUST come from the JSON file. CLI overrides are no longer supported.
+- Built-in defaults are applied first; any key present in the JSON overrides them. Keys absent from the JSON keep their default value.
+- Unknown JSON keys are logged as warnings (typo detection).
+- Major code simplification (~350 lines removed): shared helpers for ISO extract/commit, GRUB config, line-ending normalization; perf fix on `Add-ContentAfterLine` and `Set-DebugSSHModifications`.
+- Bug fix: VIA / VIAVMware / VIAHR NodeExporter section was injecting into the hardcoded `vbr-ks.cfg` instead of the active appliance kickstart.
+
+## What's New (v2.6)
+- Now requires PowerShell 7+ 
+- Add Service Provider doesn't require any external tool anymore
+- Node_Exporter install use offline_repo
+- debug works for all VIA
+- 2.6.1 : fixed issue - hardened repo not pairing automatically after deployment 
+- 2.6.2 : fixed issue - official updater repo re-enablement after being disabled by offline repo (node exporter & restore conf)
 
 ## What's New (v2.5)
 
 - Now works with RTM_13.0.1.180_20251101
 - Confirmed with RTM : Add service provider works with SO (no logic added w/o SO yet)
-- Enhanced logics with retry for reliability
-- Restart TTY end of script for reliability
+- Enhanced logics with retry & Restart TTY end of script for reliability
 
 ## What's New (v2.4)
 
@@ -80,7 +96,7 @@ https://www.veeam.com/kb4772
 
 ### System Requirements
 - **Operating System**: Windows 10/11 or Windows Server 2016+
-- **PowerShell**: Version 5.1 or higher
+- **PowerShell**: Version 7 or higher
 - **WSL**: Windows Subsystem for Linux (Ubuntu/Debian recommended)
 - **Memory**: Minimum 4GB RAM (8GB recommended for large ISOs)
 - **Storage**: At least 14GB free space for ISO manipulation
@@ -88,21 +104,21 @@ https://www.veeam.com/kb4772
 ### Software Dependencies
 **Software dependencies:**
 - `xorriso` installed in WSL
-    `
+    ```
     sudo apt-get update
     sudo apt-get install xorriso
-    `
+    ```
 - For RHEL/CentOS/Rocky:
-    `
+    ```
     sudo yum install xorriso
-    `
+    ```
 
 **PowerShell configuration:**
 - Run with an appropriate execution policy
 - Confirm WSL is accessible:
-    `
+    ```
     wsl --version
-    `
+    ```
 
 ### Optionnal Dependencies
 **VBR tunning : License file**
@@ -111,18 +127,11 @@ https://www.veeam.com/kb4772
 - `LicenseVBRTune` set to `$true`
 
 **node_exporter**
-- `node_exporter` folder at / of the folder where you run the script
-- `LICENSE + node_exporter + NOTICE` inside the folder
-- Where `node_exporter` is the uncompressed binary downloaded from offical repo
-- Warning : “fapolicyd” disallow execution of random binary – might not work in the future. Need to add node_exporter repository and rpm file installation instead
+- copy offline_repo in the same folder you execut the script
 - Might not work on VIA - Hardened Repository (not tested)
-- Use `NodeExporterDNF` parameters to download & install instead using local folder (requires internet)
 
 **Veeam Service Provider support**
-- download `vcsp` folder from repo with `veeam_requestexternal.sh`, `veeam_sovalidrequest.sh`
 - fill json parameters starting with VCSP
-- download `offline_repo` folder and place it at / of the folder where you run the script
-
 
 **Configuration Restore**
 - download `conf` folder from repo with inside `unattended.xml`, `veeam_addsoconfpw.sh`, and your bco rename to `conftoresto.bco` (hard coded)
@@ -134,7 +143,9 @@ https://www.veeam.com/kb4772
 
 ## Quick Start
 
-### Using JSON Configuration (Recommended)
+### Using JSON Configuration (Required)
+
+> Since v2.7, the JSON config file is **mandatory**. `-ConfigFile` is the only CLI argument the script accepts; every other setting MUST be defined in the JSON.
 
 1. Create a JSON configuration file like the example below or download it from the repo :
 
@@ -167,7 +178,6 @@ https://www.veeam.com/kb4772
     "NtpServer": "time.nist.gov",
     "NtpRunSync": "true",
     "NodeExporter": false,
-    "NodeExporterDNF": false,
     "LicenseVBRTune": false,
     "LicenseFile": "Veeam-100instances-entplus-monitoring-nfr.lic",
     "SyslogServer": "",
@@ -187,16 +197,23 @@ https://www.veeam.com/kb4772
     `
     .\autodeploy.ps1 -ConfigFile "production-config.json"
     `
+4. See [Powershell Folder](https://github.com/BaptisteTellier/autodeploy/tree/main/powershell) for Auto-Deployment PowerShell Exemple :
+
+- Create-ISO.ps1 - Generates multiple bootable ISO images for Veeam appliances ( VSA + VIA Proxy + VIA Hardened Repository )
+- AutoProvisionning.ps1 - Add ISO to VMs, change boot order to DVD-ROM and starts Hyper-V VMs
+- Install-VeeamInfra.ps1 - Configures Veeam infrastructure components (VIA Proxy + VIA Hardened Repository)
 
 ---
 
 ## Configuration Parameters
 
+> All keys below are **JSON config keys** (since v2.7). The only CLI argument is `-ConfigFile <path-to-json>`. Any key omitted from the JSON keeps its built-in default.
+
 ### Core Parameters
 
 | Parameter | Type   | Description                      | Default                                   | Required     |
 |-----------|--------|----------------------------------|-------------------------------------------|-------------|
-| ConfigFile    | String | Path to JSON file                 | ""                                        | No          |
+| `-ConfigFile` (CLI only) | String | Path to the JSON configuration file (the ONLY CLI argument) | _(none)_ | **Yes** |
 | SourceISO     | String | Source ISO filename (required)    | VeeamSoftwareAppliance_13.0.0.4967_20250822.iso | Yes         |
 | OutputISO     | String | Customized ISO filename           | auto (adds _customized)                   | No          |
 | ApplianceType    | String | VSA, VIA, VIAVMware, and VIAHR | VSA                                       | No          |
@@ -238,8 +255,7 @@ https://www.veeam.com/kb4772
 
 | Parameter           | Type    | Description                      | Default                                   |
 |---------------------|---------|----------------------------------|-------------------------------------------|
-| NodeExporter        | Bool    | Deploy Prometheus node_exporter Local folder required | false                |
-| NodeExporterDNF     | Bool    | Deploy Prometheus node_exporter Online required | false                      |
+| NodeExporter        | Bool    | Deploy Prometheus node_exporter - offline_repo folder required | false                |
 | LicenseVBRTune      | Bool    | Auto-install Veeam license (only VSA) | false                                |
 | LicenseFile         | String  | License filename                 | Veeam-100instances-entplus-monitoring-nfr.lic |
 | SyslogServer        | String  | Syslog server IP                 | ""                                        |
@@ -285,9 +301,8 @@ https://www.veeam.com/kb4772
 ## How Optional Feature works :
 
 ### Node_Exporter
-The script automatically creates systemd services for:
+The script install node_exporter from offline repo
 - Prometheus monitoring with firewall configuration 9100
-- if you use DNF json parameters, it will download and install node_exporter from online repo
 
 ### VBR Tunning
 - **License Installation**: Automated license deployment and activation
@@ -306,13 +321,11 @@ $CustomVBRBlock = @(
 )
 ```
 
-### VCSP Connection (RTM 13.0.1 and above)
+### VCSP Connection (RTM_13.0.1.180_20251101 and above)
 - **VCSP Connection**: Veeam Service service provider integration with credential management & VSPC management agent flag enable
 - (works with optional feature : VBR Tunning to install license)
-- work only with SO for now
-- `veeam_requestexternal.sh` and `veeam_sovalidrequest.sh` are use at first boot, during `veeam-init.sh` to enable analytics on hostmanager before adding the VCSP
-- check `/var/log/veeam_init.log` for progression but also directly named log
-- it install curl and oathtool from offline repo and then removes it
+- check `/var/log/veeam_init.log` for progression
+- If you want to remotly enable analytics, for cloud init for exemple, check VCSP folder for bash script
 
 
 ### CFG files Only
@@ -343,14 +356,14 @@ Step 5/5: Final verification
 Final verification successful
 Process completed successfully
 ```
-- install curl and oathtool from offline repo and then removes it
+- install curl and oathtool from offline repo and then removes oathtool
 
 ---
 
 ## Known issues
 - If you enable NtpRunSync and it fails, customization fails
 - Using static IP doesn't set DNS properly : BUG in VSA, will be fix by Veeam. **Workaround :** DHCP or Enter Network in TUI parameter and Apply
-- If it boots on the init wizard but it's already fully configured and you cannot go through. Check `/var/log/veeam_init.log` something went wrong. **Workaround :** Reinstall
+- If it boots on the init wizard but it's already fully configured and you cannot go through. wait 2-3min. Then check `/var/log/veeam_init.log` (ctrl+alt+F2-F3 etc... to change TTY ) - something went wrong. **Workaround :** Reinstall
 
 ## Troubleshooting
 
@@ -361,9 +374,9 @@ Process completed successfully
 - If you just installed WSL, you might have permission issue, reboot Windows
 - Confirm ISO file is located in the same directory as the script
 - Use correct JSON structure with all parameters
-- You **cannot override** parameters in CLI if you use JSON
+- All parameters MUST be defined in the JSON file. Since v2.7 the only CLI argument the script accepts is `-ConfigFile`; any other CLI argument is rejected by PowerShell as unknown.
 - If you use optionnal features: check prerequisite and folder structure
-- Use `$CFGOnly=$true` to verify your kickstart file contain all Configurations Blocks
+- Use `$CFGOnly=true` to verify your kickstart file contain all Configurations Blocks
 - Check log file `ISO_Customization.log` for timestamped error messages
 - to browse ISO with WSL xorriso `wsl xorriso -indev "VeeamSoftwareAppliance_13.0.0.4967_20250822.iso" -ls /`
 
@@ -428,8 +441,8 @@ Process completed successfully
 - [x] Automated Restore Configuration ✅ **Completed**
 - [x] Automated Restore Configuration offline ✅ **Completed**
 - [ ] Test Automated Restore Configuration offline with RTM/GA
-- [ ] Add offline repo support for node_exporter instead of binary
-- [ ] Remove curl after install to only keep curl (minimal)
+- [x] Add offline repo support for node_exporter instead of binary ✅ **Completed**
+- [ ] Remove curl after install to only keep curl-minimal (automated conf restore)
 
 
 ## Support
@@ -445,8 +458,8 @@ Process completed successfully
 ## Author & Stats
 
 **Author**: Baptiste TELLIER  
-**Version**: 2.5
-**Creation**: November 12, 2025
+**Version**: 2.6.2
+**Creation**: November 28, 2025
 
 ![GitHub stars](https://img.shields.io/github/stars/PleXi00/autodeploy)
 ![GitHub forks](https://img.shields.io/github/forks/PleXi00/autodeploy)
