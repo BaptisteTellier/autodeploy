@@ -1,3 +1,4 @@
+#Requires -Version 7.0
 <#
 .SYNOPSIS
 Veeam Appliance ISO Automation Tool
@@ -11,7 +12,7 @@ Baptiste TELLIER
 .COPYRIGHT
 Copyright (c) 2025 Baptiste TELLIER
 
-.VERSION 2.5
+.VERSION 2.7
 
 .DESCRIPTION
 This PowerShell script provides automation for customizing Veeam Appliance ISO files to enable fully automated, unattended installations.
@@ -44,8 +45,10 @@ Specifies the type of Veeam appliance to customize. Valid values: "VSA", "VIA", 
 Default: "VSA"
 
 .PARAMETER ConfigFile
-Path to JSON configuration file containing all script parameters. When specified, parameters from JSON file take precedence over default values.
-Command line parameters will override JSON values. Example: "production-config.json"
+Path to JSON configuration file. **MANDATORY** -- this is the ONLY CLI parameter accepted.
+All other settings (ApplianceType, network, Veeam credentials, optional features, ...) MUST be defined in the JSON file.
+Built-in defaults are applied first; any key present in the JSON overrides the corresponding default.
+Example: "production-config.json"
 
 .PARAMETER SourceISO
 Specifies the filename of the source Veeam Software Appliance ISO file in the current directory.
@@ -170,10 +173,6 @@ Default: "time.nist.gov"
 Boolean flag to enable node_exporter deployment. 
 Default: $false
 
-.PARAMETER NodeExporterDNF
-Boolean flag to enable node_exporter deployment using DNF package manager.
-Default: $false
-
 .PARAMETER LicenseVBRTune
 Boolean flag to enable automatic Veeam license installation. Default: $false
 
@@ -202,16 +201,16 @@ WARNING: Only use in test/development environments. Do not use in production.
 Default: $false
 
 .EXAMPLE
-Using JSON configuration file with VSA appliance (Recommended)
+Run the script (JSON-only mode -- this is the only supported invocation):
 .\autodeploy.ps1 -ConfigFile "production-config.json"
 
 .NOTES
 File Name      : autodeploy.ps1
 Author         : Baptiste TELLIER
-Prerequisite   : PowerShell 5.1+, WSL with xorriso installed
-Version        : 2.5
+Prerequisite   : PowerShell 7+, WSL with xorriso installed
+Version        : 2.7
 Creation Date  : 24/09/2025
-Last Modified  : 10/11/2025
+Last Modified  : 26/11/2025
 
 REQUIREMENTS:
 - Windows Subsystem for Linux (WSL) with xorriso package installed
@@ -223,13 +222,13 @@ REQUIREMENTS:
 
 USAGE:
 - Place this script in the same directory as your ISO file
-- Create a JSON configuration file with your desired settings
-- Run the script with -ConfigFile and -ApplianceType parameters
+- Create a JSON configuration file with your desired settings (ApplianceType included)
+- Run the script with -ConfigFile (the ONLY accepted CLI parameter)
 - All operations happen in the current directory
 
 JSON CONFIGURATION:
-The script supports loading all parameters from a JSON configuration file. Command line parameters will override JSON values.
-See example JSON file for proper structure and supported parameters.
+The script is JSON-only. All parameters MUST come from the JSON config file (CLI overrides are no longer supported).
+Built-in defaults apply for any key omitted from the JSON. See example JSON file for the full schema.
 
 OUTPUT:
 - Customized ISO
@@ -240,65 +239,12 @@ OUTPUT:
 #>
 
 #region Parameters
+# JSON-ONLY MODE: all settings are loaded from the JSON config file.
+# The only CLI parameter accepted is -ConfigFile (path to the JSON).
+# Defaults are applied first by Set-DefaultParameter, then overridden by JSON.
 param (
-    # Appliance Type Selection
-    [ValidateSet("VSA", "VIA", "VIAVMware", "VIAHR")]
-    [string]$ApplianceType = "VSA",
-
-    # JSON Configuration File
-    [string]$ConfigFile = "",
-
-    # Core Parameters
-    [string]$SourceISO = "VeeamSoftwareAppliance_13.0.0.4967_20250822.iso",
-    [string]$OutputISO = "",
-    [switch]$InPlace = $false,
-    [bool]$CreateBackup = $true,
-
-    ##DEBUG### 
-    [bool]$CleanupCFGFiles = $true,
-    [bool]$CFGOnly = $false,
-
-    ##### GRUB Configuration #####
-    [int]$GrubTimeout = 10,
-
-    ##### OS configuration #####
-    [string]$KeyboardLayout = "fr",
-    [string]$Timezone = "Europe/Paris",
-
-    ##### Network configuration #####
-    [string]$Hostname = "veeam-server",
-    [switch]$UseDHCP = $false,
-    [string]$StaticIP = "192.168.1.166",
-    [string]$Subnet = "255.255.255.0",
-    [string]$Gateway = "192.168.1.1",
-    [string[]]$DNSServers = @("192.168.1.64", "8.8.4.4"),
-
-    ##### Veeam configuration #####
-    [string]$VeeamAdminPassword = "123q123Q123!123",
-    [string]$VeeamAdminMfaSecretKey = "JBSWY3DPEHPK3PXP",
-    [string]$VeeamAdminIsMfaEnabled = "true",
-    [string]$VeeamSoPassword = "123w123W123!123",
-    [string]$VeeamSoMfaSecretKey = "JBSWY3DPEHPK3PXP",
-    [string]$VeeamSoIsMfaEnabled = "true",
-    [string]$VeeamSoRecoveryToken = "eb9fcbf4-2be6-e94d-4203-dded67c5a450",
-    [string]$VeeamSoIsEnabled = "true",
-    [string]$NtpServer = "time.nist.gov",
-    [string]$NtpRunSync = "true",
-
-    ##### optional features #####
-    [bool]$NodeExporter = $false,
-    [bool]$NodeExporterDNF = $false,
-    [bool]$LicenseVBRTune = $false,
-    [string]$LicenseFile = "Veeam-100instances-entplus-monitoring-nfr.lic",
-    [string]$SyslogServer = "",
-    [bool]$VCSPConnection = $false,
-    [string]$VCSPUrl = "",
-    [string]$VCSPLogin = "",
-    [string]$VCSPPassword = "",
-    [bool]$RestoreConfig = $false,
-    [string]$ConfigPasswordSo = "",
-    [bool]$Debug = $false
-    
+    [Parameter(Mandatory = $true, HelpMessage = "Path to the JSON configuration file containing all script settings.")]
+    [string]$ConfigFile
 )
 #endregion
 
@@ -345,206 +291,91 @@ function Import-JSONConfig {
     }
 }
 
+# WHY: list of all settings the script reads from script-scope.
+# Single source of truth -- used both by Set-DefaultParameter (defaults) and Update-ParametersFromJSON (overrides).
+$script:KnownParameters = @(
+    'ApplianceType', 'SourceISO', 'OutputISO', 'InPlace', 'CreateBackup',
+    'CleanupCFGFiles', 'CFGOnly', 'GrubTimeout', 'KeyboardLayout', 'Timezone',
+    'Hostname', 'UseDHCP', 'StaticIP', 'Subnet', 'Gateway', 'DNSServers',
+    'VeeamAdminPassword', 'VeeamAdminMfaSecretKey', 'VeeamAdminIsMfaEnabled',
+    'VeeamSoPassword', 'VeeamSoMfaSecretKey', 'VeeamSoIsMfaEnabled',
+    'VeeamSoRecoveryToken', 'VeeamSoIsEnabled', 'NtpServer', 'NtpRunSync',
+    'NodeExporter', 'LicenseVBRTune', 'LicenseFile', 'SyslogServer',
+    'VCSPConnection', 'VCSPUrl', 'VCSPLogin', 'VCSPPassword',
+    'RestoreConfig', 'ConfigPasswordSo', 'Debug'
+)
+
+function Set-DefaultParameter {
+    # JSON-ONLY MODE: defaults are applied first, then JSON values override per-key.
+    # Any key omitted from the JSON keeps its default value below.
+    $defaults = [ordered]@{
+        ApplianceType            = "VSA"
+        SourceISO                = "VeeamSoftwareAppliance_13.0.0.4967_20250822.iso"
+        OutputISO                = ""
+        InPlace                  = $false
+        CreateBackup             = $true
+        CleanupCFGFiles          = $true
+        CFGOnly                  = $false
+        GrubTimeout              = 10
+        KeyboardLayout           = "fr"
+        Timezone                 = "Europe/Paris"
+        Hostname                 = "veeam-server"
+        UseDHCP                  = $false
+        StaticIP                 = "192.168.1.166"
+        Subnet                   = "255.255.255.0"
+        Gateway                  = "192.168.1.1"
+        DNSServers               = @("192.168.1.64", "8.8.4.4")
+        VeeamAdminPassword       = "123q123Q123!123"
+        VeeamAdminMfaSecretKey   = "JBSWY3DPEHPK3PXP"
+        VeeamAdminIsMfaEnabled   = "true"
+        VeeamSoPassword          = "123w123W123!123"
+        VeeamSoMfaSecretKey      = "JBSWY3DPEHPK3PXP"
+        VeeamSoIsMfaEnabled      = "true"
+        VeeamSoRecoveryToken     = "eb9fcbf4-2be6-e94d-4203-dded67c5a450"
+        VeeamSoIsEnabled         = "true"
+        NtpServer                = "time.nist.gov"
+        NtpRunSync               = "true"
+        NodeExporter             = $false
+        LicenseVBRTune           = $false
+        LicenseFile              = "Veeam-100instances-entplus-monitoring-nfr.lic"
+        SyslogServer             = ""
+        VCSPConnection           = $false
+        VCSPUrl                  = ""
+        VCSPLogin                = ""
+        VCSPPassword             = ""
+        RestoreConfig            = $false
+        ConfigPasswordSo         = ""
+        Debug                    = $false
+    }
+    foreach ($name in $defaults.Keys) {
+        Set-Variable -Name $name -Value $defaults[$name] -Scope Script
+    }
+    Write-Log "Default parameters initialized ($($defaults.Count) keys)" 'Info'
+}
+
 function Update-ParametersFromJSON {
     param(
         [Parameter(Mandatory = $true)]
         [PSCustomObject]$Config
     )
-    
+
     Write-Log "Applying JSON configuration..." 'Info'
-    
+
+    # JSON is the single source of truth. Any key present in the JSON overrides the default.
     $parametersUpdated = 0
-    
-    if ($Config.PSObject.Properties['ApplianceType'] -and -not $PSBoundParameters.ContainsKey('ApplianceType')) {
-        $script:ApplianceType = $Config.ApplianceType
-        $parametersUpdated++
-    }
-    
-    if ($Config.PSObject.Properties['SourceISO'] -and -not $PSBoundParameters.ContainsKey('SourceISO')) {
-        $script:SourceISO = $Config.SourceISO
-        $parametersUpdated++
-    }
-    
-    if ($Config.PSObject.Properties['OutputISO'] -and -not $PSBoundParameters.ContainsKey('OutputISO')) {
-        $script:OutputISO = $Config.OutputISO
-        $parametersUpdated++
-    }
-    
-    if ($Config.PSObject.Properties['InPlace'] -and -not $PSBoundParameters.ContainsKey('InPlace')) {
-        $script:InPlace = $Config.InPlace
-        $parametersUpdated++
-    }
-    
-    if ($Config.PSObject.Properties['CreateBackup'] -and -not $PSBoundParameters.ContainsKey('CreateBackup')) {
-        $script:CreateBackup = $Config.CreateBackup
-        $parametersUpdated++
-    }
-    
-    if ($Config.PSObject.Properties['CleanupCFGFiles'] -and -not $PSBoundParameters.ContainsKey('CleanupCFGFiles')) {
-        $script:CleanupCFGFiles = $Config.CleanupCFGFiles
-        $parametersUpdated++
+    foreach ($name in $script:KnownParameters) {
+        if ($Config.PSObject.Properties[$name]) {
+            Set-Variable -Name $name -Value $Config.$name -Scope Script
+            $parametersUpdated++
+        }
     }
 
-    if ($Config.PSObject.Properties['CFGOnly'] -and -not $PSBoundParameters.ContainsKey('CFGOnly')) {
-        $script:CFGOnly = $Config.CFGOnly
-        $parametersUpdated++
-    }
-    
-    if ($Config.PSObject.Properties['GrubTimeout'] -and -not $PSBoundParameters.ContainsKey('GrubTimeout')) {
-        $script:GrubTimeout = $Config.GrubTimeout
-        $parametersUpdated++
-    }
-    
-    if ($Config.PSObject.Properties['KeyboardLayout'] -and -not $PSBoundParameters.ContainsKey('KeyboardLayout')) {
-        $script:KeyboardLayout = $Config.KeyboardLayout
-        $parametersUpdated++
-    }
-    
-    if ($Config.PSObject.Properties['Timezone'] -and -not $PSBoundParameters.ContainsKey('Timezone')) {
-        $script:Timezone = $Config.Timezone
-        $parametersUpdated++
-    }
-    
-    if ($Config.PSObject.Properties['Hostname'] -and -not $PSBoundParameters.ContainsKey('Hostname')) {
-        $script:Hostname = $Config.Hostname
-        $parametersUpdated++
-    }
-    
-    if ($Config.PSObject.Properties['UseDHCP'] -and -not $PSBoundParameters.ContainsKey('UseDHCP')) {
-        $script:UseDHCP = $Config.UseDHCP
-        $parametersUpdated++
-    }
-    
-    if ($Config.PSObject.Properties['StaticIP'] -and -not $PSBoundParameters.ContainsKey('StaticIP')) {
-        $script:StaticIP = $Config.StaticIP
-        $parametersUpdated++
-    }
-    
-    if ($Config.PSObject.Properties['Subnet'] -and -not $PSBoundParameters.ContainsKey('Subnet')) {
-        $script:Subnet = $Config.Subnet
-        $parametersUpdated++
-    }
-    
-    if ($Config.PSObject.Properties['Gateway'] -and -not $PSBoundParameters.ContainsKey('Gateway')) {
-        $script:Gateway = $Config.Gateway
-        $parametersUpdated++
-    }
-    
-    if ($Config.PSObject.Properties['DNSServers'] -and -not $PSBoundParameters.ContainsKey('DNSServers')) {
-        $script:DNSServers = $Config.DNSServers
-        $parametersUpdated++
-    }
-    
-    if ($Config.PSObject.Properties['VeeamAdminPassword'] -and -not $PSBoundParameters.ContainsKey('VeeamAdminPassword')) {
-        $script:VeeamAdminPassword = $Config.VeeamAdminPassword
-        $parametersUpdated++
-    }
-    
-    if ($Config.PSObject.Properties['VeeamAdminMfaSecretKey'] -and -not $PSBoundParameters.ContainsKey('VeeamAdminMfaSecretKey')) {
-        $script:VeeamAdminMfaSecretKey = $Config.VeeamAdminMfaSecretKey
-        $parametersUpdated++
-    }
-    
-    if ($Config.PSObject.Properties['VeeamAdminIsMfaEnabled'] -and -not $PSBoundParameters.ContainsKey('VeeamAdminIsMfaEnabled')) {
-        $script:VeeamAdminIsMfaEnabled = $Config.VeeamAdminIsMfaEnabled
-        $parametersUpdated++
-    }
-    
-    if ($Config.PSObject.Properties['VeeamSoPassword'] -and -not $PSBoundParameters.ContainsKey('VeeamSoPassword')) {
-        $script:VeeamSoPassword = $Config.VeeamSoPassword
-        $parametersUpdated++
-    }
-    
-    if ($Config.PSObject.Properties['VeeamSoMfaSecretKey'] -and -not $PSBoundParameters.ContainsKey('VeeamSoMfaSecretKey')) {
-        $script:VeeamSoMfaSecretKey = $Config.VeeamSoMfaSecretKey
-        $parametersUpdated++
-    }
-    
-    if ($Config.PSObject.Properties['VeeamSoIsMfaEnabled'] -and -not $PSBoundParameters.ContainsKey('VeeamSoIsMfaEnabled')) {
-        $script:VeeamSoIsMfaEnabled = $Config.VeeamSoIsMfaEnabled
-        $parametersUpdated++
-    }
-    
-    if ($Config.PSObject.Properties['VeeamSoRecoveryToken'] -and -not $PSBoundParameters.ContainsKey('VeeamSoRecoveryToken')) {
-        $script:VeeamSoRecoveryToken = $Config.VeeamSoRecoveryToken
-        $parametersUpdated++
-    }
-    
-    if ($Config.PSObject.Properties['VeeamSoIsEnabled'] -and -not $PSBoundParameters.ContainsKey('VeeamSoIsEnabled')) {
-        $script:VeeamSoIsEnabled = $Config.VeeamSoIsEnabled
-        $parametersUpdated++
-    }
-    
-    if ($Config.PSObject.Properties['NtpServer'] -and -not $PSBoundParameters.ContainsKey('NtpServer')) {
-        $script:NtpServer = $Config.NtpServer
-        $parametersUpdated++
-    }
-    
-    if ($Config.PSObject.Properties['NtpRunSync'] -and -not $PSBoundParameters.ContainsKey('NtpRunSync')) {
-        $script:NtpRunSync = $Config.NtpRunSync
-        $parametersUpdated++
-    }
-    
-    if ($Config.PSObject.Properties['NodeExporter'] -and -not $PSBoundParameters.ContainsKey('NodeExporter')) {
-        $script:NodeExporter = $Config.NodeExporter
-        $parametersUpdated++
+    # Warn about unknown keys in the JSON (typos, deprecated settings, ...).
+    $unknown = $Config.PSObject.Properties.Name | Where-Object { $_ -notin $script:KnownParameters }
+    if ($unknown) {
+        Write-Log "JSON contains unknown keys (ignored): $($unknown -join ', ')" 'Warn'
     }
 
-    if ($Config.PSObject.Properties['NodeExporterDNF'] -and -not $PSBoundParameters.ContainsKey('NodeExporterDNF')) {
-        $script:NodeExporterDNF = $Config.NodeExporterDNF
-        $parametersUpdated++
-    }
-    
-    if ($Config.PSObject.Properties['LicenseVBRTune'] -and -not $PSBoundParameters.ContainsKey('LicenseVBRTune')) {
-        $script:LicenseVBRTune = $Config.LicenseVBRTune
-        $parametersUpdated++
-    }
-    
-    if ($Config.PSObject.Properties['LicenseFile'] -and -not $PSBoundParameters.ContainsKey('LicenseFile')) {
-        $script:LicenseFile = $Config.LicenseFile
-        $parametersUpdated++
-    }
-    
-    if ($Config.PSObject.Properties['SyslogServer'] -and -not $PSBoundParameters.ContainsKey('SyslogServer')) {
-        $script:SyslogServer = $Config.SyslogServer
-        $parametersUpdated++
-    }
-    
-    if ($Config.PSObject.Properties['VCSPConnection'] -and -not $PSBoundParameters.ContainsKey('VCSPConnection')) {
-        $script:VCSPConnection = $Config.VCSPConnection
-        $parametersUpdated++
-    }
-    
-    if ($Config.PSObject.Properties['VCSPUrl'] -and -not $PSBoundParameters.ContainsKey('VCSPUrl')) {
-        $script:VCSPUrl = $Config.VCSPUrl
-        $parametersUpdated++
-    }
-    
-    if ($Config.PSObject.Properties['VCSPLogin'] -and -not $PSBoundParameters.ContainsKey('VCSPLogin')) {
-        $script:VCSPLogin = $Config.VCSPLogin
-        $parametersUpdated++
-    }
-    
-    if ($Config.PSObject.Properties['VCSPPassword'] -and -not $PSBoundParameters.ContainsKey('VCSPPassword')) {
-        $script:VCSPPassword = $Config.VCSPPassword
-        $parametersUpdated++
-    }
-
-    if ($Config.PSObject.Properties['RestoreConfig'] -and -not $PSBoundParameters.ContainsKey('RestoreConfig')) {
-        $script:RestoreConfig = $Config.RestoreConfig
-        $parametersUpdated++
-    }
-    
-    if ($Config.PSObject.Properties['ConfigPasswordSo'] -and -not $PSBoundParameters.ContainsKey('ConfigPasswordSo')) {
-        $script:ConfigPasswordSo = $Config.ConfigPasswordSo
-        $parametersUpdated++
-    }
-
-    if ($Config.PSObject.Properties['Debug'] -and -not $PSBoundParameters.ContainsKey('Debug')) {
-        $script:Debug = $Config.Debug
-        $parametersUpdated++
-    }
-    
     Write-Log "Applied $parametersUpdated parameters from JSON configuration" 'Info'
 }
 
@@ -630,7 +461,7 @@ function Initialize-ISOOperation {
         SourceISO = $SourceISO
         TargetISO = $targetISO
         BackupPath = $backupPath
-        IsInPlace = $InPlace.IsPresent
+        IsInPlace = [bool]$InPlace
         Mode = if ($CFGOnly) {"CFG ONLY"} elseif ($InPlace) { "In-Place" } else { "Out-of-Place" }
         RestoreConfig = $RestoreConfig
         Debug = $Debug
@@ -701,13 +532,12 @@ function Get-ModificationSummary {
 
     $summary += ""
     $summary += "OPTIONAL FEATURES:"
-    $summary += "  Node Exporter Local: $(if ($NodeExporter) { 'Enabled' } else { 'Disabled' })"
-    $summary += "  Node Exporter Online: $(if ($NodeExporterDNF) { 'Enabled' } else { 'Disabled' })"
+    $summary += "  Node Exporter: $(if ($NodeExporter) { 'Enabled' } else { 'Disabled' })"
+    $summary += "  Debug: $(if ($ISOInfo.Debug) { 'Enabled' } else { 'Disabled' })"
     if($ApplianceType -eq "VSA"){
     $summary += "  License Auto-Install: $(if ($LicenseVBRTune) { 'Enabled' } else { 'Disabled' })"
     $summary += "  VCSP Connection: $(if ($VCSPConnection) { 'Enabled' } else { 'Disabled' })"
     $summary += "  Restore Config: $(if ($ISOInfo.RestoreConfig) { 'Enabled' } else { 'Disabled' })"
-    $summary += "  Debug: $(if ($ISOInfo.Debug) { 'Enabled' } else { 'Disabled' })"
     }
     $summary += "=================================================================================================="
 
@@ -742,22 +572,104 @@ function Add-ContentAfterLine {
 
     try {
         $content = Get-Content $FilePath
-        $newContent = @()
+        $newContent = [System.Collections.Generic.List[string]]::new($content.Count + $NewLines.Count)
 
         foreach ($line in $content) {
-            $newContent += $line
+            $newContent.Add($line)
             if ($line -like "*$TargetLine*") {
-                $newContent += $NewLines
+                $newContent.AddRange([string[]]$NewLines)
                 Write-Log "Added content after line: $TargetLine" 'Info'
             }
         }
 
-        $newContent | Set-Content -Path $FilePath
+        Set-Content -Path $FilePath -Value $newContent.ToArray()
     }
     catch {
         Write-Log "Failed to add content to $FilePath`: $($_.Exception.Message)" 'Error'
         throw
     }
+}
+
+function ConvertTo-LFLineEnding {
+    param([Parameter(Mandatory)][string[]]$Files)
+
+    Write-Log "Normalizing line endings..." 'Info'
+    foreach ($file in $Files) {
+        $content = Get-Content $file -Raw
+        $content = $content.Replace("`r`n", "`n")
+        Set-Content $file $content -NoNewline
+    }
+}
+
+function Invoke-ISOExtractConfig {
+    param(
+        [Parameter(Mandatory)][string]$TargetISO,
+        [Parameter(Mandatory)][string]$KickstartName
+    )
+
+    $extractCommands = @(
+        "wsl xorriso -boot_image any keep -dev `"$TargetISO`" -osirrox on -extract $KickstartName $KickstartName",
+        "wsl xorriso -boot_image any keep -dev `"$TargetISO`" -osirrox on -extract /EFI/BOOT/grub.cfg grub.cfg"
+    )
+
+    foreach ($cmd in $extractCommands) {
+        if (-not (Invoke-WSLCommand -Command $cmd -Description "Extract configuration files")) {
+            throw "Failed to extract files from ISO"
+        }
+    }
+
+    @($KickstartName, "grub.cfg") | ForEach-Object {
+        if (-not (Test-Path $_)) {
+            throw "Required file not extracted: $_"
+        }
+        Write-Log "File extracted: $_" 'Info'
+    }
+}
+
+function Invoke-ISOCommit {
+    param(
+        [Parameter(Mandatory)][string]$TargetISO,
+        [Parameter(Mandatory)][string]$KickstartName
+    )
+
+    Write-Log "Committing changes to ISO..." 'Info'
+
+    $commitCommands = @(
+        "wsl xorriso -boot_image any keep -dev `"$TargetISO`" -rm $KickstartName",
+        "wsl xorriso -boot_image any keep -dev `"$TargetISO`" -map $KickstartName $KickstartName",
+        "wsl xorriso -boot_image any keep -dev `"$TargetISO`" -rm /EFI/BOOT/grub.cfg",
+        "wsl xorriso -boot_image any keep -dev `"$TargetISO`" -map grub.cfg /EFI/BOOT/grub.cfg"
+    )
+
+    foreach ($cmd in $commitCommands) {
+        if (-not (Invoke-WSLCommand -Command $cmd -Description "Commit changes to ISO")) {
+            throw "Failed to commit changes to ISO"
+        }
+    }
+
+    Write-Log "ISO customization completed successfully!" 'Info'
+}
+
+function Set-GrubDefaultAndTimeout {
+    param(
+        [Parameter(Mandatory)][string]$DefaultLabel,
+        [Parameter(Mandatory)][int]$Timeout
+    )
+
+    Update-FileContent -FilePath "grub.cfg" -Pattern 'set default=.*' -Replacement "set default=$DefaultLabel"
+    Update-FileContent -FilePath "grub.cfg" -Pattern 'set timeout=.*' -Replacement "set timeout=$Timeout"
+}
+
+function Add-FolderToISO {
+    param(
+        [Parameter(Mandatory)][string]$TargetISO,
+        [Parameter(Mandatory)][string]$LocalPath,
+        [Parameter(Mandatory)][string]$ISOPath
+    )
+
+    if (-not (Test-Path $LocalPath)) { return }
+    $cmd = "wsl xorriso -boot_image any keep -dev `"$TargetISO`" -map $LocalPath $ISOPath"
+    Invoke-WSLCommand -Command $cmd -Description "Add $LocalPath folder to ISO" | Out-Null
 }
 
 #endregion
@@ -827,72 +739,56 @@ function Set-NetworkConfiguration {
 
 function Set-DebugSSHModifications {
     param([string]$FilePath)
-    
+
     if (-not $Debug) {
         return
     }
-    
+
     Write-Log "Applying DEBUG mode SSH modifications..." 'Warn'
-    
-    # Block 1 & 6: Remove all 'systemctl disable sshd.service' lines
-    $content = Get-Content $FilePath
-    $newContent = @()
-    foreach ($line in $content) {
-        if ($line -notlike "*systemctl disable sshd.service*") {
-            $newContent += $line
-        }
-    }
-    Set-Content $FilePath $newContent
-    Write-Log "Removed systemctl disable sshd.service lines" 'Info'
-    
-    # Block 2: Change root password configuration
-    Update-FileContent -FilePath $FilePath -Pattern "rootpw --iscrypted --lock \*" -Replacement "rootpw --allow-ssh --plaintext 123q123Q123!123"
+
+    # Single-pass refactor: 1 read + in-memory regex replaces + 1 line-pass + 1 write
+    # (was 6 reads + 6 writes across separate blocks)
+    $raw = [System.IO.File]::ReadAllText($FilePath)
+
+    $raw = $raw -replace 'rootpw --iscrypted --lock \*', 'rootpw --allow-ssh --plaintext 123q123Q123!123'
     Write-Log "Changed root password to plaintext" 'Info'
-    
-    # Block 3: Remove root user line - add bin bash shell
 
-    Update-FileContent -FilePath $FilePath -Pattern "user --name root --shell /sbin/nologin*" -Replacement "user --name root --shell /bin/bash"
+    $raw = $raw -replace 'user --name root --shell /sbin/nologin.*', 'user --name root --shell /bin/bash'
     Write-Log "Removed root user nologin configuration" 'Info'
-    
-    # Block 4: Add SSH firewall rule before static packages installation
-    $content = Get-Content $FilePath
-    $newContent = @()
-    foreach ($line in $content) {
-        if ($line -like "*log 'Install static packages'*" -or $line -like '*log "Install static packages"*') {
-            $newContent += "log 'Temporary allow 22 port in kickstart in debug purposes'"
-            $newContent += "cp /usr/lib/firewalld/zones/drop.xml /etc/firewalld/zones/drop.xml"
-            $newContent += 'sed -i "/<forward\/>/i \  <service name=\"ssh\"/>" /etc/firewalld/zones/drop.xml'
-        }
-        $newContent += $line
-    }
-    Set-Content $FilePath $newContent
-    Write-Log "Added SSH firewall rule before static packages" 'Info'
-    
-    # Block 5: Add SSH root access configuration after "Configure ssh access"
-    
-    Update-FileContent -FilePath $FilePath -Pattern 'echo "AllowGroups veeam-grp-admin".*' -Replacement "`$1`n`nlog 'Temporary enable ssh root access in testing purposes'`ncat > /etc/ssh/sshd_config.d/00-complianceascode-hardening.conf << EOF`nAllowGroups veeam-grp-admin root`nPermitRootLogin yes`nEOF`nsystemctl restart sshd"
 
+    $sshRootBlock = "`$1`n`nlog 'Temporary enable ssh root access in testing purposes'`ncat > /etc/ssh/sshd_config.d/00-complianceascode-hardening.conf << EOF`nAllowGroups veeam-grp-admin root`nPermitRootLogin yes`nEOF`nsystemctl restart sshd"
+    $raw = $raw -replace 'echo "AllowGroups veeam-grp-admin".*', $sshRootBlock
     Write-Log "Added SSH root access configuration" 'Info'
 
-    # Block 5: Reset password expiration for users
-    $content = Get-Content $FilePath
-    $newContent = @()
-    $foundTarget = $false
-    foreach ($line in $content) {
-        $newContent += $line
-        if (($line -like '*systemctl enable veeamhostmanager.service*') -and -not $foundTarget) {
-            $newContent += 'chage -d $(date +%Y-%m-%d) root'
-            $newContent += 'chage -d $(date +%Y-%m-%d) veeamadmin'
-            $newContent += 'chage -d $(date +%Y-%m-%d) veeamso'
-            $newContent += 'chage -d $(date +%Y-%m-%d) veeamtui'
-            $newContent += 'usermod -s /bin/bash root'
-            $foundTarget = $true
+    $sourceLines = $raw -split "`r?`n"
+    $lines = [System.Collections.Generic.List[string]]::new($sourceLines.Count + 16)
+    $foundVHM = $false
+    foreach ($line in $sourceLines) {
+        if ($line -like "*systemctl disable sshd.service*") { continue }
+
+        if ($line -like "*log 'Install static packages'*" -or $line -like '*log "Install static packages"*') {
+            $lines.Add("log 'Temporary allow 22 port in kickstart in debug purposes'")
+            $lines.Add("cp /usr/lib/firewalld/zones/drop.xml /etc/firewalld/zones/drop.xml")
+            $lines.Add('sed -i "/<forward\/>/i \  <service name=\"ssh\"/>" /etc/firewalld/zones/drop.xml')
+        }
+
+        $lines.Add($line)
+
+        if (-not $foundVHM -and $line -like '*systemctl enable veeamhostmanager.service*') {
+            $lines.Add('chage -d $(date +%Y-%m-%d) root')
+            $lines.Add('chage -d $(date +%Y-%m-%d) veeamadmin')
+            $lines.Add('chage -d $(date +%Y-%m-%d) veeamso')
+            $lines.Add('chage -d $(date +%Y-%m-%d) veeamtui')
+            $lines.Add('usermod -s /bin/bash root')
+            $foundVHM = $true
         }
     }
-
-    Set-Content $FilePath $newContent
+    Write-Log "Removed systemctl disable sshd.service lines" 'Info'
+    Write-Log "Added SSH firewall rule before static packages" 'Info'
     Write-Log "reset password expiration for users" 'Info'
-    
+
+    Set-Content -Path $FilePath -Value $lines.ToArray()
+
     Write-Log "DEBUG mode SSH modifications completed" 'Warn'
 }
 
@@ -908,7 +804,6 @@ function Get-CustomVBRBlock {
         "Install-VBRLicense -Path /etc/veeam/license/$LicenseFile"
     )
     
-    # Ajouter la ligne syslog seulement si SyslogServer a une valeur
     if ($SyslogServer) {
         $block += "Set-VBRServerSyslog -SyslogServer '$SyslogServer' -SyslogPort 514 -Protocol UDP"
     }
@@ -918,98 +813,16 @@ function Get-CustomVBRBlock {
     return $block
 }
 
-function Get-CustomVCSPBlock {
-    return @(
-        "echo 'Requesting External Component access...'",
-        "chmod +x '/etc/veeam/veeam_requestexternal.sh'",
-        "/bin/bash /etc/veeam/veeam_requestexternal.sh '$VeeamAdminMfaSecretKey' 'veeamadmin' '$VeeamAdminPassword'",
-        "echo 'OK : Request External Component access done'",
-        "sleep 5s",
-        "echo 'Accepting Request'",
-        "chmod +x '/etc/veeam/veeam_sovalidrequest.sh'",
-        "/bin/bash /etc/veeam/veeam_sovalidrequest.sh '$VeeamSoMfaSecretKey' 'veeamso' '$VeeamSoPassword'",
-        "echo 'OK : Request accepted successfully'",
-        "sleep 5s",
-        "echo 'Adding to Service Provider with Mgmt Agent'",
-        "pwsh -Command '",
-        "Import-Module /opt/veeam/powershell/Veeam.Backup.PowerShell/Veeam.Backup.PowerShell.psd1",
-        "Add-VBRCloudProviderCredentials -Name '$VCSPLogin' -Password '$VCSPPassword'",
-        "`$credentials = Get-VBRCloudProviderCredentials -Name '$VCSPLogin'",
-        "Add-VBRCloudProvider -Address '$VCSPUrl' -Credentials `$credentials -InstallManagementAgent -Force",
-        "'"
-        #"echo 'Cleaning up oathtool and script ...'",
-        #"dnf -y remove oathtool",
-        #"dnf clean all",
-        #"rm -f /etc/veeam/veeam_sovalidrequest.sh /etc/veeam/veeam_requestexternal.sh"
-    )
-}
-
-function Get-CustomVCSPBlock2 {
+function Get-CustomVCSPBlock3 {
 $bashScript = 
 @"
 #==============================================================================
-# Request External Component with retry
+# enable external managers installation
 #==============================================================================
-echo 'Requesting External Component access...'
-chmod +x '/etc/veeam/veeam_requestexternal.sh'
-
-ATTEMPT=1
-SUCCESS=0
-while [ `$ATTEMPT -le 3 ]; do
-    echo "[Attempt `$ATTEMPT/3] Running veeam_requestexternal.sh"
-    if /bin/bash /etc/veeam/veeam_requestexternal.sh '$VeeamAdminMfaSecretKey' 'veeamadmin' '$VeeamAdminPassword'; then
-        echo "[SUCCESS] Request completed on attempt `$ATTEMPT"
-        SUCCESS=1
-        break
-    else
-        echo "[FAILED] Request failed on attempt `$ATTEMPT"
-        if [ `$ATTEMPT -lt 3 ]; then
-            echo "Waiting 5 seconds before retry..."
-            sleep 5
-        fi
-    fi
-    ATTEMPT=`$((ATTEMPT + 1))
-done
-
-if [ `$SUCCESS -eq 0 ]; then
-    echo '[ERROR] Failed to request external component after 3 attempts'
-    exit 1
-fi
-
-echo 'OK : Request External Component access done'
-sleep 5
-
-#==============================================================================
-# Accept Request with retry
-#==============================================================================
-echo 'Accepting Request...'
-chmod +x '/etc/veeam/veeam_sovalidrequest.sh'
-
-ATTEMPT=1
-SUCCESS=0
-while [ `$ATTEMPT -le 3 ]; do
-    echo "[Attempt `$ATTEMPT/3] Running veeam_sovalidrequest.sh"
-    if /bin/bash /etc/veeam/veeam_sovalidrequest.sh '$VeeamSoMfaSecretKey' 'veeamso' '$VeeamSoPassword'; then
-        echo "[SUCCESS] Request accepted on attempt `$ATTEMPT"
-        SUCCESS=1
-        break
-    else
-        echo "[FAILED] Request validation failed on attempt `$ATTEMPT"
-        if [ `$ATTEMPT -lt 3 ]; then
-            echo "Waiting 5 seconds before retry..."
-            sleep 5
-        fi
-    fi
-    ATTEMPT=`$((ATTEMPT + 1))
-done
-
-if [ `$SUCCESS -eq 0 ]; then
-    echo '[ERROR] Failed to accept request after 3 attempts'
-    exit 1
-fi
-
-echo 'OK : Request accepted successfully'
-sleep 15
+echo 'enabling external managers installation...'
+touch /etc/veeam/allow_external_managers_installation
+echo 'external managers installation enabled'
+sleep 2
 
 #==============================================================================
 # Add to Service Provider
@@ -1054,32 +867,12 @@ if [ `$SUCCESS -eq 0 ]; then
 fi
 
 echo 'OK : Added to Service Provider successfully'
-echo 'removing scripts & oathtool...'
-rm -f /etc/veeam/veeam_sovalidrequest.sh /etc/veeam/veeam_requestexternal.sh
-dnf -y remove oathtool
-dnf clean all
-echo 'scripts & oathtool removed successfully'
-
+sleep 2
+echo 'disable allow_external_managers_installation flag'
+rm -f /etc/veeam/allow_external_managers_installation
+echo 'flag disabled successfully'
 "@
     return $bashScript -replace "`r`n", "`n"
-}
-
-function Get-VCSPCopyBlock {
-    return @(
-        "# Copy veeam_requestexternal.sh file",
-        "log 'starting veeam_requestexternal.sh file copy'",
-        "cp -f /mnt/install/repo/vcsp/veeam_requestexternal.sh /mnt/sysimage/etc/veeam/veeam_requestexternal.sh",
-        "chmod 600 /mnt/sysimage/etc/veeam/veeam_requestexternal.sh",
-        "chown root:root /mnt/sysimage/etc/veeam/veeam_requestexternal.sh",
-        "log 'veeam_requestexternal.sh file copy completed'"
-
-        "# Copy veeam_sovalidrequest.sh file",
-        "log 'starting veeam_sovalidrequest.sh file copy'",
-        "cp -f /mnt/install/repo/vcsp/veeam_sovalidrequest.sh /mnt/sysimage/etc/veeam/veeam_sovalidrequest.sh",
-        "chmod 600 /mnt/sysimage/etc/veeam/veeam_sovalidrequest.sh",
-        "chown root:root /mnt/sysimage/etc/veeam/veeam_sovalidrequest.sh",
-        "log 'veeam_sovalidrequest.sh file copy completed'"
-    )
 }
 
 function Get-CopyLicenseBlock {
@@ -1093,49 +886,6 @@ function Get-CopyLicenseBlock {
         "  chown root:root /mnt/sysimage/etc/veeam/license/$LicenseFile",
         "fi",
         "log 'license file copy completed'"
-    )
-}
-
-function Get-CopyNodeExporterBlock {
-    return @(
-        "# Copy node_exporter files to OS",
-        "log 'starting node_exporter files copy'",
-        "mkdir -p /mnt/sysimage/etc/node_exporter",
-        "if [ -d /mnt/install/repo/node_exporter ]; then",
-        "    cp -r /mnt/install/repo/node_exporter /mnt/sysimage/etc/",
-        "fi",
-        "log 'node_exporter files copy completed'"
-    )
-}
-
-function Get-NodeExporterSetupBlock {
-    return @(
-        "# Setup node_exporter service",
-        "log 'starting node_exporter installation'",
-        "groupadd -f node_exporter",
-        "useradd -g node_exporter --no-create-home --shell /bin/false node_exporter",
-        "chown node_exporter:node_exporter /etc/node_exporter",
-        "cat << EOF >> /etc/systemd/system/node_exporter.service",
-        "[Unit]",
-        "Description=Node Exporter",
-        "Documentation=https://prometheus.io/docs/guides/node-exporter/",
-        "Wants=network-online.target",
-        "After=network-online.target",
-        "",
-        "[Service]",
-        "User=node_exporter",
-        "Group=node_exporter",
-        "Type=simple",
-        "Restart=on-failure",
-        "ExecStart=/etc/node_exporter/node_exporter --web.listen-address=:9100",
-        "",
-        "[Install]",
-        "WantedBy=multi-user.target",
-        "EOF",
-        "chmod 664 /etc/systemd/system/node_exporter.service",
-        "systemctl daemon-reload",
-        "systemctl enable node_exporter.service",
-        "log 'node_exporter installation completed'"
     )
 }
 
@@ -1182,6 +932,8 @@ function Get-VeeamHostConfigBlock {
         "echo 'Disabling veeam-init service...'",
         "systemctl disable veeam-init",
         "echo 'OK : Service disabled'",
+        "echo 'removing offline repo /tmp/offline_repo if exists'",
+        "rm /tmp/offline_repo -rf"
         "echo 'Restarting getty services...'",
         "systemctl restart getty@tty1.service",
         "systemctl restart getty@tty2.service",
@@ -1215,18 +967,31 @@ function Get-VeeamHostConfigBlock {
     )
 }
 
-function Get-NodeExporterDNFBlock {
+function Get-OfflineRepoEnableLine {
     return @(
-        "log '[1/4] Enabling Rocky Linux repos and EPEL...'",
-        "rpm -q epel-release &>/dev/null || rpm -Uvh https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm",
-        "dnf clean all && dnf -y makecache",
-        "dnf -y install dnf-plugins-core || true",
-        "dnf -y config-manager --set-enabled crb || true",
-        "dnf -y install epel-release",
-        "dnf -y makecache",
+        "cat << EOF >> /etc/yum.repos.d/local-offline.repo",
+        "[local-offline]",
+        "name=Local Offline Repository for oathtool and curl",
+        "enabled=1",
+        "gpgcheck=0",
+        "baseurl=file:///tmp/offline_repo",
+        "EOF"
+    )
+}
 
-        "log '[2/4] Installing node_exporter...'",
-        "dnf -y install node_exporter",
+function Get-NodeExporterOfflineBlock {
+    return @(
+        "# Install node_exporter from offline repo",
+        "log '[1/4] Enabling offline repository...'"
+    ) + (Get-OfflineRepoEnableLine) + @(
+        "log '[2/4] Installing node_exporter from offline repo...'",
+        "dnf clean all --releasever 9",
+        "dnf --disablerepo='*' --enablerepo='local-offline' install -y node_exporter --releasever 9",
+        "log 'node_exporter installation completed'",
+        "log 'removing offline repository /etc/yum.repos.d/local-offline.repo'",
+        "rm -f /etc/yum.repos.d/local-offline.repo",
+        "dnf clean all",
+        "dnf config-manager --set-enabled '*'",
 
         "log '[3/4] Configuring /etc/sysconfig/node_exporter ...'",
         'bash -c ''echo OPTIONS="--web.listen-address=0.0.0.0:9100" > /etc/sysconfig/node_exporter''',
@@ -1240,32 +1005,15 @@ function Get-NodeExporterDNFBlock {
 
 function Get-InstalloathtoolOfflineBlock {
     return @(
-        "log '[1/2] Enabling offline repository...'",
-        "cat << EOF >> /etc/yum.repos.d/local-offline.repo",
-        "[local-offline]",
-        "name=Local Offline Repository for oathtool and curl",
-        "enabled=1",
-        "gpgcheck=0",
-        "baseurl=file:///tmp/offline_repo",
-        "EOF",
+        "log '[1/2] Enabling offline repository...'"
+    ) + (Get-OfflineRepoEnableLine) + @(
         "log '[2/2] Installing oathtool and curl from RPMs...'",
         "dnf clean all --releasever 9",
         "dnf --disablerepo='*' --enablerepo='local-offline' install -y oathtool curl --releasever 9",
-        "log 'oathtool and curl installation completed'"
-        "log 'removing offline repository /tmp/offline_repo'"
-        "rm /tmp/offline_repo -rf"
-    )
-}
-
-function Get-InstalloathtoolOnlineBlock {
-    return @(
-        "log '[1/2] Enabling Rocky Linux repos and EPEL...'",
-        "rpm -q epel-release &>/dev/null || rpm -Uvh https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm",
-        "dnf clean all && dnf -y makecache",
-        "log '[2/2] Installing oathtool and curl...'",
-        "dnf -y install oathtool",
-        "dnf -y install curl",
-        "log 'oathtool and curl installation completed'"
+        "log 'oathtool and curl installation completed'",
+        "log 'removing offline repository /etc/yum.repos.d/local-offline.repo'",
+        "rm -f /etc/yum.repos.d/local-offline.repo",
+        "dnf config-manager --set-enabled '*'"
     )
 }
 
@@ -1362,6 +1110,7 @@ function Get-RestoreFileCopyBlock {
 
 function Get-OfflineRepoFileCopyBlock {
     return @(
+        "# Copy Offline Repo files",
         "log 'starting offline repo copy'",
         "cp -fr /mnt/install/repo/offline_repo /mnt/sysimage/tmp/offline_repo",
         "log 'copy offline repo completed'"
@@ -1376,6 +1125,8 @@ function Invoke-VSA {
     Write-Log "=================================================================================================="
     Write-Log "                         VSA WORKFLOW - VEEAM SOFTWARE APPLIANCE"
     Write-Log "=================================================================================================="
+
+    $script:ActiveCfgFile = "vbr-ks.cfg"
 
     Write-Log "Config only set to $CFGOnly" 'Info'
     if($CFGOnly){
@@ -1404,29 +1155,20 @@ function Invoke-VSA {
 
     Write-Log "Extracting configuration files from ISO..." 'Info'
 
-    $extractCommands = @(
-        "wsl xorriso -boot_image any keep -dev `"$($isoInfo.TargetISO)`" -osirrox on -extract vbr-ks.cfg vbr-ks.cfg",
-        "wsl xorriso -boot_image any keep -dev `"$($isoInfo.TargetISO)`" -osirrox on -extract /EFI/BOOT/grub.cfg grub.cfg"
-    )
+    Invoke-ISOExtractConfig -TargetISO $isoInfo.TargetISO -KickstartName "vbr-ks.cfg"
 
-    foreach ($cmd in $extractCommands) {
-        if (-not (Invoke-WSLCommand -Command $cmd -Description "Extract configuration files")) {
-            throw "Failed to extract files from ISO"
-        }
-    }
-
-    @("vbr-ks.cfg", "grub.cfg") | ForEach-Object {
-        if (-not (Test-Path $_)) {
-            throw "Required file not extracted: $_"
-        }
-        Write-Log "File extracted: $_" 'Info'
-    }
+    #####
+    #GRUB
+    #####
 
     Write-Log "Configuring GRUB bootloader..." 'Info'
     Update-FileContent -FilePath "grub.cfg" -Pattern '^(.*inst.ks=hd:LABEL=VeeamSA:/vbr-ks.cfg quiet.*)$' -Replacement '${1} inst.assumeyes'
     $newDefault = '"Veeam Backup & Replication v13.0>Install - fresh install, wipes everything (including local backups)"'
-    Update-FileContent -FilePath "grub.cfg" -Pattern 'set default=.*' -Replacement "set default=$newDefault"
-    Update-FileContent -FilePath "grub.cfg" -Pattern 'set timeout=.*' -Replacement "set timeout=$GrubTimeout"
+    Set-GrubDefaultAndTimeout -DefaultLabel $newDefault -Timeout $GrubTimeout
+
+    #####
+    #KSICKSTART
+    #####
 
     Write-Log "Configuring Kickstart file..." 'Info'
     Set-KeyboardLayout -FilePath "vbr-ks.cfg" -Layout $KeyboardLayout
@@ -1441,10 +1183,22 @@ function Invoke-VSA {
     Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine "mkdir -p /var/log/veeam/" -NewLines @("touch /etc/veeam/cockpit_auto_test_disable_init")
 
     Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine 'find /etc/yum.repos.d/ -type f -not -name "*veeam*" -delete' -NewLines (Get-VeeamHostConfigBlock)
+ 
+    #####
+    #Optional Modifications 
+    #####
+
+    #####
+    #SSh modifications for DEBUG mode
+    #####
 
     if ($Debug) {
         Set-DebugSSHModifications -FilePath "vbr-ks.cfg"
     }
+    
+    #####
+    #Restore Configuration
+    #####
     
     if ($RestoreConfig) {
         Write-Log "Adding restore configuration..." 'Info'
@@ -1455,92 +1209,59 @@ function Invoke-VSA {
         if ($VeeamSoIsEnabled -eq $true) {
             Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine 'dnf install -y --nogpgcheck --disablerepo="*" /tmp/static-packages/*.rpm' -NewLines (Get-InstalloathtoolOfflineBlock)
         }
-        if(-not $CFGOnly){
-            if (Test-Path "conf") {
-                $confCmd = "wsl xorriso -boot_image any keep -dev `"$($isoInfo.TargetISO)`" -map conf /conf"
-                Invoke-WSLCommand -Command $confCmd -Description "Add conf folder to ISO" | Out-Null
-            }
-            if (Test-Path "offline_repo") {
-                $confCmd = "wsl xorriso -boot_image any keep -dev `"$($isoInfo.TargetISO)`" -map offline_repo /offline_repo"
-                Invoke-WSLCommand -Command $confCmd -Description "Add offline_repo folder to ISO" | Out-Null
-            }
+        if (-not $CFGOnly) {
+            Add-FolderToISO -TargetISO $isoInfo.TargetISO -LocalPath "conf" -ISOPath "/conf"
+            Add-FolderToISO -TargetISO $isoInfo.TargetISO -LocalPath "offline_repo" -ISOPath "/offline_repo"
         }
     }
+
+    #####
+    #VCSP Configuration
+    #####
 
     if ($VCSPConnection) {
         Write-Log "Adding VCSP configuration..." 'Info'
-        Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine "/usr/bin/cp -rv /tmp/*.* /mnt/sysimage/var/log/appliance-installation-logs/" -NewLines (Get-VCSPCopyBlock)
-        Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine "/usr/bin/cp -rv /tmp/*.* /mnt/sysimage/var/log/appliance-installation-logs/" -NewLines (Get-OfflineRepoFileCopyBlock)
-        Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine 'dnf install -y --nogpgcheck --disablerepo="*" /tmp/static-packages/*.rpm' -NewLines (Get-InstalloathtoolOfflineBlock)
-
-        Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine "/opt/veeam/hostmanager/veeamhostmanager --apply_init_config /etc/veeam/vbr_init.cfg" -NewLines (Get-CustomVCSPBlock2)
-        if(-not $CFGOnly){
-            if (Test-Path "vcsp") {
-                $confCmd = "wsl xorriso -boot_image any keep -dev `"$($isoInfo.TargetISO)`" -map vcsp /vcsp"
-                Invoke-WSLCommand -Command $confCmd -Description "Add vcsp folder to ISO" | Out-Null
-            }
-            if (Test-Path "offline_repo") {
-                $confCmd = "wsl xorriso -boot_image any keep -dev `"$($isoInfo.TargetISO)`" -map offline_repo /offline_repo"
-                Invoke-WSLCommand -Command $confCmd -Description "Add offline_repo folder to ISO" | Out-Null
-            }
-        }
+        Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine "/opt/veeam/hostmanager/veeamhostmanager --apply_init_config /etc/veeam/vbr_init.cfg" -NewLines (Get-CustomVCSPBlock3)
     }
+
+    #####
+    #VBR License Configuration
+    #####
 
     if ($LicenseVBRTune) {
         Write-Log "Adding license configuration..." 'Info'
         Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine "/opt/veeam/hostmanager/veeamhostmanager --apply_init_config /etc/veeam/vbr_init.cfg" -NewLines (Get-CustomVBRBlock)
         Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine "/usr/bin/cp -rv /tmp/*.* /mnt/sysimage/var/log/appliance-installation-logs/" -NewLines (Get-CopyLicenseBlock)
-        if(-not $CFGOnly){
-            if (Test-Path "license") {
-                $licenseCmd = "wsl xorriso -boot_image any keep -dev `"$($isoInfo.TargetISO)`" -map license /license"
-                Invoke-WSLCommand -Command $licenseCmd -Description "Add license folder to ISO" | Out-Null
-            }
+        if (-not $CFGOnly) {
+            Add-FolderToISO -TargetISO $isoInfo.TargetISO -LocalPath "license" -ISOPath "/license"
         }
     }
+
+    #####
+    #Node Exporter Configuration
+    #####
 
     if ($NodeExporter) {
         Write-Log "Adding node_exporter configuration..." 'Info'
-        Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine 'dnf install -y --nogpgcheck --disablerepo="*" /tmp/static-packages/*.rpm' -NewLines (Get-NodeExporterSetupBlock)
-        Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine "/usr/bin/cp -rv /tmp/*.* /mnt/sysimage/var/log/appliance-installation-logs/" -NewLines (Get-CopyNodeExporterBlock)
+        Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine "/usr/bin/cp -rv /tmp/*.* /mnt/sysimage/var/log/appliance-installation-logs/" -NewLines (Get-OfflineRepoFileCopyBlock)
+
         Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine "/opt/veeam/hostmanager/veeamhostmanager --apply_init_config /etc/veeam/vbr_init.cfg" -NewLines (Get-NodeExporterFirewallBlock)
-        if(-not $CFGOnly){
-            if (Test-Path "node_exporter") {
-                $nodeCmd = "wsl xorriso -boot_image any keep -dev `"$($isoInfo.TargetISO)`" -map node_exporter /node_exporter"
-                Invoke-WSLCommand -Command $nodeCmd -Description "Add node_exporter folder to ISO" | Out-Null
-            }
+
+        Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine "dnf install -y --nogpgcheck --disablerepo="*" /tmp/static-packages/*.rpm" -NewLines (Get-NodeExporterOfflineBlock)
+
+        if (-not $CFGOnly) {
+            Add-FolderToISO -TargetISO $isoInfo.TargetISO -LocalPath "offline_repo" -ISOPath "/offline_repo"
         }
-    }
+    } 
 
-    if ($NodeExporterDNF){
-        Write-Log "Adding node_exporter with DNF configuration..." 'Info'
-        Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine 'dnf install -y --nogpgcheck --disablerepo="*" /tmp/static-packages/*.rpm' -NewLines (Get-NodeExporterDNFBlock)
-        Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine "/opt/veeam/hostmanager/veeamhostmanager --apply_init_config /etc/veeam/vbr_init.cfg" -NewLines (Get-NodeExporterFirewallBlock)
-    }
+    #####
+    ##Normalize line endings & commit changes to ISO
+    #####
 
-    Write-Log "Normalizing line endings..." 'Info'
-    @("vbr-ks.cfg", "grub.cfg") | ForEach-Object {
-        $content = Get-Content $_ -Raw
-        $content = $content.Replace("`r`n", "`n")
-        Set-Content $_ $content -NoNewline -Encoding UTF8
-    }
-    
-    if(-not $CFGOnly){
-        Write-Log "Committing changes to ISO..." 'Info'
+    ConvertTo-LFLineEnding -Files @("vbr-ks.cfg", "grub.cfg")
 
-        $commitCommands = @(
-            "wsl xorriso -boot_image any keep -dev `"$($isoInfo.TargetISO)`" -rm vbr-ks.cfg",
-            "wsl xorriso -boot_image any keep -dev `"$($isoInfo.TargetISO)`" -map vbr-ks.cfg vbr-ks.cfg",
-            "wsl xorriso -boot_image any keep -dev `"$($isoInfo.TargetISO)`" -rm /EFI/BOOT/grub.cfg",
-            "wsl xorriso -boot_image any keep -dev `"$($isoInfo.TargetISO)`" -map grub.cfg /EFI/BOOT/grub.cfg"
-        )
-
-        foreach ($cmd in $commitCommands) {
-            if (-not (Invoke-WSLCommand -Command $cmd -Description "Commit changes to ISO")) {
-                throw "Failed to commit changes to ISO"
-            }
-        }
-
-        Write-Log "ISO customization completed successfully!" 'Info'
+      if(-not $CFGOnly){
+        Invoke-ISOCommit -TargetISO $isoInfo.TargetISO -KickstartName "vbr-ks.cfg"
     }
 
     Write-Host "`n==================================================================================================" -ForegroundColor Green
@@ -1580,6 +1301,7 @@ function Invoke-VIA {
     Write-Log "=================================================================================================="
 
     $CFGname = "proxy-ks.cfg"
+    $script:ActiveCfgFile = $CFGname
 
     Write-Log "Config only set to $CFGOnly" 'Info'
     if($CFGOnly){
@@ -1608,30 +1330,13 @@ function Invoke-VIA {
 
     Write-Log "Extracting configuration files from ISO..." 'Info'
 
-    $extractCommands = @(
-        "wsl xorriso -boot_image any keep -dev `"$($isoInfo.TargetISO)`" -osirrox on -extract $CFGname $CFGname",
-        "wsl xorriso -boot_image any keep -dev `"$($isoInfo.TargetISO)`" -osirrox on -extract /EFI/BOOT/grub.cfg grub.cfg"
-    )
-
-    foreach ($cmd in $extractCommands) {
-        if (-not (Invoke-WSLCommand -Command $cmd -Description "Extract configuration files")) {
-            throw "Failed to extract files from ISO"
-        }
-    }
-
-    @("$CFGname", "grub.cfg") | ForEach-Object {
-        if (-not (Test-Path $_)) {
-            throw "Required file not extracted: $_"
-        }
-        Write-Log "File extracted: $_" 'Info'
-    }
+    Invoke-ISOExtractConfig -TargetISO $isoInfo.TargetISO -KickstartName $CFGname
 
     Write-Log "Configuring GRUB bootloader..." 'Info'
     $pattern = "^(.*LABEL=VeeamJeOS:/$CFGname quiet.*)$"
     Update-FileContent -FilePath "grub.cfg" -Pattern $pattern -Replacement '${1} inst.assumeyes'
     $newDefault = '"Veeam Infrastructure Appliance>Install - fresh install, wipes everything (including local backups)"'
-    Update-FileContent -FilePath "grub.cfg" -Pattern 'set default=.*' -Replacement "set default=$newDefault"
-    Update-FileContent -FilePath "grub.cfg" -Pattern 'set timeout=.*' -Replacement "set timeout=$GrubTimeout"
+    Set-GrubDefaultAndTimeout -DefaultLabel $newDefault -Timeout $GrubTimeout
 
     Write-Log "Configuring Kickstart file..." 'Info'
     Set-KeyboardLayout -FilePath "$CFGname" -Layout $KeyboardLayout
@@ -1646,49 +1351,35 @@ function Invoke-VIA {
     Add-ContentAfterLine -FilePath "$CFGname" -TargetLine "mkdir -p /var/log/veeam/" -NewLines @("touch /etc/veeam/cockpit_auto_test_disable_init")
 
     Add-ContentAfterLine -FilePath "$CFGname" -TargetLine 'find /etc/yum.repos.d/ -type f -not -name "*veeam*" -delete' -NewLines (Get-VeeamHostConfigBlock)
+    #####
+    #Optional Modifications 
+    #####
 
-     if ($NodeExporter) {
+    #####
+    #SSh modifications for DEBUG mode
+    #####
+    if ($Debug) {
+        Set-DebugSSHModifications -FilePath "$CFGname"
+    }
+
+    #####
+    #Node Exporter Configuration
+    #####
+
+    if ($NodeExporter) {
         Write-Log "Adding node_exporter configuration..." 'Info'
-        Add-ContentAfterLine -FilePath "$CFGname" -TargetLine 'dnf install -y --nogpgcheck --disablerepo="*" /tmp/static-packages/*.rpm' -NewLines (Get-NodeExporterSetupBlock)
-        Add-ContentAfterLine -FilePath "$CFGname" -TargetLine "/usr/bin/cp -rv /tmp/*.* /mnt/sysimage/var/log/appliance-installation-logs/" -NewLines (Get-CopyNodeExporterBlock)
-        Add-ContentAfterLine -FilePath "$CFGname" -TargetLine "/opt/veeam/hostmanager/veeamhostmanager --apply_init_config /etc/veeam/vbr_init.cfg" -NewLines (Get-NodeExporterFirewallBlock)
-
-        if (Test-Path "node_exporter") {
-            $nodeCmd = "wsl xorriso -boot_image any keep -dev `"$($isoInfo.TargetISO)`" -map node_exporter /node_exporter"
-            Invoke-WSLCommand -Command $nodeCmd -Description "Add node_exporter folder to ISO" | Out-Null
+        Add-ContentAfterLine -FilePath $CFGname -TargetLine "/usr/bin/cp -rv /tmp/*.* /mnt/sysimage/var/log/appliance-installation-logs/" -NewLines (Get-OfflineRepoFileCopyBlock)
+        Add-ContentAfterLine -FilePath $CFGname -TargetLine "/usr/bin/cp -rv /tmp/*.* /mnt/sysimage/var/log/appliance-installation-logs/" -NewLines (Get-NodeExporterOfflineBlock)
+        Add-ContentAfterLine -FilePath $CFGname -TargetLine "/opt/veeam/hostmanager/veeamhostmanager --apply_init_config /etc/veeam/vbr_init.cfg" -NewLines (Get-NodeExporterFirewallBlock)
+        if (-not $CFGOnly) {
+            Add-FolderToISO -TargetISO $isoInfo.TargetISO -LocalPath "offline_repo" -ISOPath "/offline_repo"
         }
-    }
+    } 
 
-    if ($NodeExporterDNF){
-        Write-Log "Adding node_exporter with DNF configuration..." 'Info'
-        Add-ContentAfterLine -FilePath "$CFGname" -TargetLine 'dnf install -y --nogpgcheck --disablerepo="*" /tmp/static-packages/*.rpm' -NewLines (Get-NodeExporterDNFBlock)
-        Add-ContentAfterLine -FilePath "$CFGname" -TargetLine "/opt/veeam/hostmanager/veeamhostmanager --apply_init_config /etc/veeam/vbr_init.cfg" -NewLines (Get-NodeExporterFirewallBlock)
-    }
-
-    Write-Log "Normalizing line endings..." 'Info'
-    @("$CFGname", "grub.cfg") | ForEach-Object {
-        $content = Get-Content $_ -Raw
-        $content = $content.Replace("`r`n", "`n")
-        Set-Content $_ $content -NoNewline
-    }
+    ConvertTo-LFLineEnding -Files @($CFGname, "grub.cfg")
     
     if(-not $CFGOnly){
-        Write-Log "Committing changes to ISO..." 'Info'
-
-        $commitCommands = @(
-            "wsl xorriso -boot_image any keep -dev `"$($isoInfo.TargetISO)`" -rm $CFGname",
-            "wsl xorriso -boot_image any keep -dev `"$($isoInfo.TargetISO)`" -map $CFGname $CFGname",
-            "wsl xorriso -boot_image any keep -dev `"$($isoInfo.TargetISO)`" -rm /EFI/BOOT/grub.cfg",
-            "wsl xorriso -boot_image any keep -dev `"$($isoInfo.TargetISO)`" -map grub.cfg /EFI/BOOT/grub.cfg"
-        )
-
-        foreach ($cmd in $commitCommands) {
-            if (-not (Invoke-WSLCommand -Command $cmd -Description "Commit changes to ISO")) {
-                throw "Failed to commit changes to ISO"
-            }
-        }
-
-        Write-Log "ISO customization completed successfully!" 'Info'
+        Invoke-ISOCommit -TargetISO $isoInfo.TargetISO -KickstartName $CFGname
     }
 
     Write-Host "`n==================================================================================================" -ForegroundColor Green
@@ -1723,6 +1414,7 @@ function Invoke-VIAVMware {
     Write-Log "=================================================================================================="
 
     $CFGname = "vmware-proxy-ks.cfg"
+    $script:ActiveCfgFile = $CFGname
 
     Write-Log "Config only set to $CFGOnly" 'Info'
     if($CFGOnly){
@@ -1751,30 +1443,13 @@ function Invoke-VIAVMware {
 
     Write-Log "Extracting configuration files from ISO..." 'Info'
 
-    $extractCommands = @(
-        "wsl xorriso -boot_image any keep -dev `"$($isoInfo.TargetISO)`" -osirrox on -extract $CFGname $CFGname",
-        "wsl xorriso -boot_image any keep -dev `"$($isoInfo.TargetISO)`" -osirrox on -extract /EFI/BOOT/grub.cfg grub.cfg"
-    )
-
-    foreach ($cmd in $extractCommands) {
-        if (-not (Invoke-WSLCommand -Command $cmd -Description "Extract configuration files")) {
-            throw "Failed to extract files from ISO"
-        }
-    }
-
-    @("$CFGname", "grub.cfg") | ForEach-Object {
-        if (-not (Test-Path $_)) {
-            throw "Required file not extracted: $_"
-        }
-        Write-Log "File extracted: $_" 'Info'
-    }
+    Invoke-ISOExtractConfig -TargetISO $isoInfo.TargetISO -KickstartName $CFGname
 
     Write-Log "Configuring GRUB bootloader..." 'Info'
     $pattern = "^(.*LABEL=VeeamJeOS:/$CFGname quiet.*)$"
     Update-FileContent -FilePath "grub.cfg" -Pattern $pattern -Replacement '${1} inst.assumeyes'
     $newDefault = '"Veeam Infrastructure Appliance (with iSCSI & NVMe/TCP)>Install - fresh install, wipes everything (including local backups)"'
-    Update-FileContent -FilePath "grub.cfg" -Pattern 'set default=.*' -Replacement "set default=$newDefault"
-    Update-FileContent -FilePath "grub.cfg" -Pattern 'set timeout=.*' -Replacement "set timeout=$GrubTimeout"
+    Set-GrubDefaultAndTimeout -DefaultLabel $newDefault -Timeout $GrubTimeout
 
     Write-Log "Configuring Kickstart file..." 'Info'
     Set-KeyboardLayout -FilePath "$CFGname" -Layout $KeyboardLayout
@@ -1789,49 +1464,31 @@ function Invoke-VIAVMware {
     Add-ContentAfterLine -FilePath "$CFGname" -TargetLine "mkdir -p /var/log/veeam/" -NewLines @("touch /etc/veeam/cockpit_auto_test_disable_init")
 
     Add-ContentAfterLine -FilePath "$CFGname" -TargetLine 'find /etc/yum.repos.d/ -type f -not -name "*veeam*" -delete' -NewLines (Get-VeeamHostConfigBlock)
+    #####
+    #Optional Modifications 
+    #####
 
-     if ($NodeExporter) {
+    #####
+    #SSh modifications for DEBUG mode
+    #####
+    if ($Debug) {
+        Set-DebugSSHModifications -FilePath "$CFGname"
+    }
+
+    if ($NodeExporter) {
         Write-Log "Adding node_exporter configuration..." 'Info'
-        Add-ContentAfterLine -FilePath "$CFGname" -TargetLine 'dnf install -y --nogpgcheck --disablerepo="*" /tmp/static-packages/*.rpm' -NewLines (Get-NodeExporterSetupBlock)
-        Add-ContentAfterLine -FilePath "$CFGname" -TargetLine "/usr/bin/cp -rv /tmp/*.* /mnt/sysimage/var/log/appliance-installation-logs/" -NewLines (Get-CopyNodeExporterBlock)
-        Add-ContentAfterLine -FilePath "$CFGname" -TargetLine "/opt/veeam/hostmanager/veeamhostmanager --apply_init_config /etc/veeam/vbr_init.cfg" -NewLines (Get-NodeExporterFirewallBlock)
-
-        if (Test-Path "node_exporter") {
-            $nodeCmd = "wsl xorriso -boot_image any keep -dev `"$($isoInfo.TargetISO)`" -map node_exporter /node_exporter"
-            Invoke-WSLCommand -Command $nodeCmd -Description "Add node_exporter folder to ISO" | Out-Null
+        Add-ContentAfterLine -FilePath $CFGname -TargetLine "/usr/bin/cp -rv /tmp/*.* /mnt/sysimage/var/log/appliance-installation-logs/" -NewLines (Get-OfflineRepoFileCopyBlock)
+        Add-ContentAfterLine -FilePath $CFGname -TargetLine "/usr/bin/cp -rv /tmp/*.* /mnt/sysimage/var/log/appliance-installation-logs/" -NewLines (Get-NodeExporterOfflineBlock)
+        Add-ContentAfterLine -FilePath $CFGname -TargetLine "/opt/veeam/hostmanager/veeamhostmanager --apply_init_config /etc/veeam/vbr_init.cfg" -NewLines (Get-NodeExporterFirewallBlock)
+        if (-not $CFGOnly) {
+            Add-FolderToISO -TargetISO $isoInfo.TargetISO -LocalPath "offline_repo" -ISOPath "/offline_repo"
         }
     }
 
-    if ($NodeExporterDNF){
-        Write-Log "Adding node_exporter with DNF configuration..." 'Info'
-        Add-ContentAfterLine -FilePath "$CFGname" -TargetLine 'dnf install -y --nogpgcheck --disablerepo="*" /tmp/static-packages/*.rpm' -NewLines (Get-NodeExporterDNFBlock)
-        Add-ContentAfterLine -FilePath "$CFGname" -TargetLine "/opt/veeam/hostmanager/veeamhostmanager --apply_init_config /etc/veeam/vbr_init.cfg" -NewLines (Get-NodeExporterFirewallBlock)
-    }
+    ConvertTo-LFLineEnding -Files @($CFGname, "grub.cfg")
 
-    Write-Log "Normalizing line endings..." 'Info'
-    @("$CFGname", "grub.cfg") | ForEach-Object {
-        $content = Get-Content $_ -Raw
-        $content = $content.Replace("`r`n", "`n")
-        Set-Content $_ $content -NoNewline
-    }
-    
     if(-not $CFGOnly){
-        Write-Log "Committing changes to ISO..." 'Info'
-
-        $commitCommands = @(
-            "wsl xorriso -boot_image any keep -dev `"$($isoInfo.TargetISO)`" -rm $CFGname",
-            "wsl xorriso -boot_image any keep -dev `"$($isoInfo.TargetISO)`" -map $CFGname $CFGname",
-            "wsl xorriso -boot_image any keep -dev `"$($isoInfo.TargetISO)`" -rm /EFI/BOOT/grub.cfg",
-            "wsl xorriso -boot_image any keep -dev `"$($isoInfo.TargetISO)`" -map grub.cfg /EFI/BOOT/grub.cfg"
-        )
-
-        foreach ($cmd in $commitCommands) {
-            if (-not (Invoke-WSLCommand -Command $cmd -Description "Commit changes to ISO")) {
-                throw "Failed to commit changes to ISO"
-            }
-        }
-
-        Write-Log "ISO customization completed successfully!" 'Info'
+        Invoke-ISOCommit -TargetISO $isoInfo.TargetISO -KickstartName $CFGname
     }
 
     Write-Host "`n==================================================================================================" -ForegroundColor Green
@@ -1866,6 +1523,7 @@ function Invoke-VIAHR {
     Write-Log "=================================================================================================="
 
     $CFGname = "hardened-repo-ks.cfg"
+    $script:ActiveCfgFile = $CFGname
 
     Write-Log "Config only set to $CFGOnly" 'Info'
     if($CFGOnly){
@@ -1894,30 +1552,13 @@ function Invoke-VIAHR {
 
     Write-Log "Extracting configuration files from ISO..." 'Info'
 
-    $extractCommands = @(
-        "wsl xorriso -boot_image any keep -dev `"$($isoInfo.TargetISO)`" -osirrox on -extract $CFGname $CFGname",
-        "wsl xorriso -boot_image any keep -dev `"$($isoInfo.TargetISO)`" -osirrox on -extract /EFI/BOOT/grub.cfg grub.cfg"
-    )
-
-    foreach ($cmd in $extractCommands) {
-        if (-not (Invoke-WSLCommand -Command $cmd -Description "Extract configuration files")) {
-            throw "Failed to extract files from ISO"
-        }
-    }
-
-    @("$CFGname", "grub.cfg") | ForEach-Object {
-        if (-not (Test-Path $_)) {
-            throw "Required file not extracted: $_"
-        }
-        Write-Log "File extracted: $_" 'Info'
-    }
+    Invoke-ISOExtractConfig -TargetISO $isoInfo.TargetISO -KickstartName $CFGname
 
     Write-Log "Configuring GRUB bootloader..." 'Info'
     $pattern = "^(.*LABEL=VeeamJeOS:/$CFGname quiet.*)$"
     Update-FileContent -FilePath "grub.cfg" -Pattern $pattern -Replacement '${1} inst.assumeyes'
     $newDefault = '"Veeam Hardened Repository>Install - fresh install, wipes everything (including local backups)"'
-    Update-FileContent -FilePath "grub.cfg" -Pattern 'set default=.*' -Replacement "set default=$newDefault"
-    Update-FileContent -FilePath "grub.cfg" -Pattern 'set timeout=.*' -Replacement "set timeout=$GrubTimeout"
+    Set-GrubDefaultAndTimeout -DefaultLabel $newDefault -Timeout $GrubTimeout
 
     Write-Log "Configuring Kickstart file..." 'Info'
     Set-KeyboardLayout -FilePath "$CFGname" -Layout $KeyboardLayout
@@ -1932,31 +1573,33 @@ function Invoke-VIAHR {
     Add-ContentAfterLine -FilePath "$CFGname" -TargetLine "mkdir -p /var/log/veeam/" -NewLines @("touch /etc/veeam/cockpit_auto_test_disable_init")
 
     Add-ContentAfterLine -FilePath "$CFGname" -TargetLine 'find /etc/yum.repos.d/ -type f -not -name "*veeam*" -delete' -NewLines (Get-VeeamHostConfigBlock)
+    ### 2.6.1 fix - hardened repo secret token not pairing automaticly
+    Add-ContentAfterLine -FilePath "$CFGname" -TargetLine '/opt/veeam/hostmanager/veeamhostmanager --apply_init_config /etc/veeam/vbr_init.cfg' -NewLines ('export VEEAM_SECRETTOKEN="000000" && /opt/veeam/deployment/veeamdeploymentsvc --start-pairing --timeout -1')
+    #####
+    #Optional Modifications 
+    #####
 
-    Write-Log "Normalizing line endings..." 'Info'
-    @("$CFGname", "grub.cfg") | ForEach-Object {
-        $content = Get-Content $_ -Raw
-        $content = $content.Replace("`r`n", "`n")
-        Set-Content $_ $content -NoNewline
+    #####
+    #SSh modifications for DEBUG mode
+    #####
+    if ($Debug) {
+        Set-DebugSSHModifications -FilePath "$CFGname"
     }
+
+        if ($NodeExporter) {
+        Write-Log "Adding node_exporter configuration..." 'Info'
+        Add-ContentAfterLine -FilePath $CFGname -TargetLine "/usr/bin/cp -rv /tmp/*.* /mnt/sysimage/var/log/appliance-installation-logs/" -NewLines (Get-OfflineRepoFileCopyBlock)
+        Add-ContentAfterLine -FilePath $CFGname -TargetLine "/usr/bin/cp -rv /tmp/*.* /mnt/sysimage/var/log/appliance-installation-logs/" -NewLines (Get-NodeExporterOfflineBlock)
+        Add-ContentAfterLine -FilePath $CFGname -TargetLine "/opt/veeam/hostmanager/veeamhostmanager --apply_init_config /etc/veeam/vbr_init.cfg" -NewLines (Get-NodeExporterFirewallBlock)
+        if (-not $CFGOnly) {
+            Add-FolderToISO -TargetISO $isoInfo.TargetISO -LocalPath "offline_repo" -ISOPath "/offline_repo"
+        }
+    } 
+
+    ConvertTo-LFLineEnding -Files @($CFGname, "grub.cfg")
     
     if(-not $CFGOnly){
-        Write-Log "Committing changes to ISO..." 'Info'
-
-        $commitCommands = @(
-            "wsl xorriso -boot_image any keep -dev `"$($isoInfo.TargetISO)`" -rm $CFGname",
-            "wsl xorriso -boot_image any keep -dev `"$($isoInfo.TargetISO)`" -map $CFGname $CFGname",
-            "wsl xorriso -boot_image any keep -dev `"$($isoInfo.TargetISO)`" -rm /EFI/BOOT/grub.cfg",
-            "wsl xorriso -boot_image any keep -dev `"$($isoInfo.TargetISO)`" -map grub.cfg /EFI/BOOT/grub.cfg"
-        )
-
-        foreach ($cmd in $commitCommands) {
-            if (-not (Invoke-WSLCommand -Command $cmd -Description "Commit changes to ISO")) {
-                throw "Failed to commit changes to ISO"
-            }
-        }
-
-        Write-Log "ISO customization completed successfully!" 'Info'
+        Invoke-ISOCommit -TargetISO $isoInfo.TargetISO -KickstartName $CFGname
     }
 
     Write-Host "`n==================================================================================================" -ForegroundColor Green
@@ -1990,15 +1633,19 @@ try {
     Start-Transcript -Path $logFile -Append
 
     Write-Log "=================================================================================================="
-    Write-Log "Veeam ISO Customization Script - Version 2.4"
+    Write-Log "Veeam ISO Customization Script - Version 2.7"
     Write-Log "=================================================================================================="
 
-    if (-not [string]::IsNullOrWhiteSpace($ConfigFile)) {
-        $jsonConfig = Import-JSONConfig -ConfigFilePath $ConfigFile
-        Update-ParametersFromJSON -Config $jsonConfig
-        Write-Log "Configuration loaded from JSON file: $ConfigFile" 'Info'
-    } else {
-        Write-Log "Using default parameters (no JSON configuration file specified)" 'Info'
+    # JSON-ONLY MODE: defaults first, JSON wins for any key it defines.
+    Set-DefaultParameter
+    $jsonConfig = Import-JSONConfig -ConfigFilePath $ConfigFile
+    Update-ParametersFromJSON -Config $jsonConfig
+    Write-Log "Configuration loaded from JSON file: $ConfigFile" 'Info'
+
+    # Post-load validation (ValidateSet was on the param block, now gone).
+    $validApplianceTypes = @('VSA', 'VIA', 'VIAVMware', 'VIAHR')
+    if ($ApplianceType -notin $validApplianceTypes) {
+        throw "Invalid ApplianceType '$ApplianceType' in JSON. Must be one of: $($validApplianceTypes -join ', ')"
     }
 
     Write-Log "Selected Appliance Type: $ApplianceType" 'Info'
@@ -2020,9 +1667,6 @@ try {
             Write-Log "Invoking Veeam Hardened Repository workflow..." 'Info'
             $resultISO = Invoke-VIAHR
         }
-        default {
-            throw "Invalid ApplianceType: $ApplianceType. Valid values are 'VSA', 'VIA', 'VIAVMware', or 'VIAHR'."
-        }
     }
 
     Write-Log "Script execution completed successfully" 'Info'
@@ -2037,8 +1681,8 @@ try {
     Write-Host "Check log file: $logFile" -ForegroundColor Red
     Write-Host "==================================================================================================" -ForegroundColor Red
 
-    if($CleanupCFGFiles){
-        @("vbr-ks.cfg", "proxy-ks.cfg", "vmware-proxy-ks.cfg", "hardened-repo-ks.cfg", "grub.cfg") | ForEach-Object {
+    if ($CleanupCFGFiles) {
+        @($script:ActiveCfgFile, "grub.cfg") | Where-Object { $_ } | ForEach-Object {
             if (Test-Path $_ -ErrorAction SilentlyContinue) {
                 Remove-Item $_ -Force -ErrorAction SilentlyContinue
             }
