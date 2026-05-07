@@ -11,7 +11,7 @@
 
 This advanced PowerShell script automates the customization of Veeam Software Appliance ISO files, enabling fully automated, unattended appliance deployments with enterprise-grade, reusable configurations. It supports JSON configuration loading, out-of-place ISO modification, advanced logging, and optional IS backup creation. Network, security, and monitoring details can be configured to fit enterprise environments.
 
-- Tested on build 13.0.0.4967_20250822 & 13.0.1.180_20251101
+- Tested on build 13.0.0.4967_20250822 & 13.0.1.180_20251101 & 13.0.1.2067_20260310
 - For Auto-Deployment PowerShell exemple : [Powershell Folder](https://github.com/BaptisteTellier/autodeploy/tree/main/powershell)
 - For Packer remote kickstart exemple : [Packer Folder](https://github.com/BaptisteTellier/autodeploy/tree/main/packer)
 - Youtube video - French audi with Eng Sub : [Part 1](https://www.youtube.com/watch?v=Ri877QyX6i8) [Part 2](https://www.youtube.com/watch?v=fIvcHSPhUUM) [Part 3](https://www.youtube.com/watch?v=MwQcrLufKDU) [Part 4](https://www.youtube.com/watch?v=O56TzfvDNT0) [Part 5](https://www.youtube.com/watch?v=-LA9wKzujyA)
@@ -21,8 +21,8 @@ This advanced PowerShell script automates the customization of Veeam Software Ap
 - **JSON-only mode (BREAKING)**: `-ConfigFile` is now the only CLI argument; all other settings MUST come from the JSON file. CLI overrides are no longer supported.
 - Built-in defaults are applied first; any key present in the JSON overrides them. Keys absent from the JSON keep their default value.
 - Unknown JSON keys are logged as warnings (typo detection).
-- Major code simplification (~350 lines removed): shared helpers for ISO extract/commit, GRUB config, line-ending normalization; perf fix on `Add-ContentAfterLine` and `Set-DebugSSHModifications`.
-- Bug fix: VIA / VIAVMware / VIAHR NodeExporter section was injecting into the hardcoded `vbr-ks.cfg` instead of the active appliance kickstart.
+- TO DO : Multiple NTP
+- TO DO : Disable IPV6
 
 ## What's New (v2.6)
 - Now requires PowerShell 7+ 
@@ -428,22 +428,6 @@ Process completed successfully
 
 1. Fork this repo and create a pull request to suggest improvements.
 2. Use [GitHub Issues](https://github.com/PleXi00/autodeploy/issues) for bugs or feature requests.
-
----
-
-## TO DO
-
-- [x] Parameters to change Hostname ✅ **Completed**
-- [x] Function to change IP / DHCP ✅ **Completed**
-- [x] Support for multiple ISO formats (JEoS & VSA) ✅ **Completed**
-- [x] Automated backup creation before modification ✅ **Completed**
-- [x] Support for JSON configuration file ✅ **Completed**
-- [x] Automated Restore Configuration ✅ **Completed**
-- [x] Automated Restore Configuration offline ✅ **Completed**
-- [ ] Test Automated Restore Configuration offline with RTM/GA
-- [x] Add offline repo support for node_exporter instead of binary ✅ **Completed**
-- [ ] Remove curl after install to only keep curl-minimal (automated conf restore)
-
 
 ## Support
 
