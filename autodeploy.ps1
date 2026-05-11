@@ -551,6 +551,39 @@ function Get-ModificationSummary {
     return $summary -join "`n"
 }
 
+function Show-SuccessSummary {
+    # Unified success banner -- called once from the main entry after the workflow switch.
+    # Replaces the 4 duplicated blocks that lived at the end of each Invoke-* function.
+    param([Parameter(Mandatory)][hashtable]$ISOInfo)
+
+    Write-Host "`n==================================================================================================" -ForegroundColor Green
+    Write-Host "                                        SUCCESS!" -ForegroundColor Green
+    Write-Host "==================================================================================================" -ForegroundColor Green
+    Write-Host "Customized ISO: $($ISOInfo.TargetISO)" -ForegroundColor Green
+    if ($ISOInfo.BackupPath) {
+        Write-Host "Backup created: $($ISOInfo.BackupPath)" -ForegroundColor Green
+    }
+    Write-Host "Appliance Type: $ApplianceType" -ForegroundColor Green
+    Write-Host "Mode: $($ISOInfo.Mode)" -ForegroundColor Green
+    if ($ISOInfo.RestoreConfig) {
+        Write-Host "Backup Configuration Restore : $($ISOInfo.RestoreConfig)" -ForegroundColor DarkYellow
+    }
+    Write-Host "Debug mode : $($ISOInfo.Debug)" -ForegroundColor DarkYellow
+    Write-Host "==================================================================================================" -ForegroundColor Green
+}
+
+function Remove-TempCfgFile {
+    # Unified cleanup of kickstart + grub.cfg working copies.
+    # Used both by the success path (main entry) and the catch block (error path).
+    # Relies on $script:ActiveCfgFile set at the top of each Invoke-* workflow.
+    if (-not $CleanupCFGFiles) { return }
+    @($script:ActiveCfgFile, "grub.cfg") | Where-Object { $_ } | ForEach-Object {
+        if (Test-Path $_ -ErrorAction SilentlyContinue) {
+            Remove-Item $_ -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
+
 function Update-FileContent {
     param(
         [string]$FilePath,
@@ -1267,32 +1300,8 @@ function Invoke-VSA {
 
     ConvertTo-LFLineEnding -Files @("vbr-ks.cfg", "grub.cfg")
 
-      if(-not $CFGOnly){
+    if(-not $CFGOnly){
         Invoke-ISOCommit -TargetISO $isoInfo.TargetISO -KickstartName "vbr-ks.cfg"
-    }
-
-    Write-Host "`n==================================================================================================" -ForegroundColor Green
-    Write-Host "                                        SUCCESS!" -ForegroundColor Green
-    Write-Host "==================================================================================================" -ForegroundColor Green
-    Write-Host "Customized ISO: $($isoInfo.TargetISO)" -ForegroundColor Green
-    if ($isoInfo.BackupPath) {
-        Write-Host "Backup created: $($isoInfo.BackupPath)" -ForegroundColor Green
-    }
-    Write-Host "Mode: $($isoInfo.Mode)" -ForegroundColor Green
-    if ($isoInfo.RestoreConfig) {
-        Write-Host "Backup Configuration Restore : $($isoInfo.RestoreConfig)" -ForegroundColor DarkYellow
-    }
-    if ($isoInfo.Debug) {
-        Write-Host "Debug mode : $($isoInfo.Debug)" -ForegroundColor DarkYellow
-    }
-    Write-Host "==================================================================================================" -ForegroundColor Green
-
-    if($CleanupCFGFiles){
-        @("vbr-ks.cfg", "grub.cfg") | ForEach-Object {
-            if (Test-Path $_) {
-                Remove-Item $_ -Force
-            }
-        }
     }
 
     return $isoInfo
@@ -1384,28 +1393,9 @@ function Invoke-VIA {
     } 
 
     ConvertTo-LFLineEnding -Files @($CFGname, "grub.cfg")
-    
+
     if(-not $CFGOnly){
         Invoke-ISOCommit -TargetISO $isoInfo.TargetISO -KickstartName $CFGname
-    }
-
-    Write-Host "`n==================================================================================================" -ForegroundColor Green
-    Write-Host "                                        SUCCESS!" -ForegroundColor Green
-    Write-Host "==================================================================================================" -ForegroundColor Green
-    Write-Host "Customized ISO: $($isoInfo.TargetISO)" -ForegroundColor Green
-    if ($isoInfo.BackupPath) {
-        Write-Host "Backup created: $($isoInfo.BackupPath)" -ForegroundColor Green
-    }
-    Write-Host "Appliance Type: $($ApplianceType)" -ForegroundColor Green
-    Write-Host "Mode: $($isoInfo.Mode)" -ForegroundColor Green
-    Write-Host "==================================================================================================" -ForegroundColor Green
-
-    if($CleanupCFGFiles){
-        @("$CFGname", "grub.cfg") | ForEach-Object {
-            if (Test-Path $_) {
-                Remove-Item $_ -Force
-            }
-        }
     }
 
     return $isoInfo
@@ -1498,25 +1488,6 @@ function Invoke-VIAVMware {
         Invoke-ISOCommit -TargetISO $isoInfo.TargetISO -KickstartName $CFGname
     }
 
-    Write-Host "`n==================================================================================================" -ForegroundColor Green
-    Write-Host "                                        SUCCESS!" -ForegroundColor Green
-    Write-Host "==================================================================================================" -ForegroundColor Green
-    Write-Host "Customized ISO: $($isoInfo.TargetISO)" -ForegroundColor Green
-    if ($isoInfo.BackupPath) {
-        Write-Host "Backup created: $($isoInfo.BackupPath)" -ForegroundColor Green
-    }
-    Write-Host "Appliance Type: $($ApplianceType)" -ForegroundColor Green
-    Write-Host "Mode: $($isoInfo.Mode)" -ForegroundColor Green
-    Write-Host "==================================================================================================" -ForegroundColor Green
-
-    if($CleanupCFGFiles){
-        @("$CFGname", "grub.cfg") | ForEach-Object {
-            if (Test-Path $_) {
-                Remove-Item $_ -Force
-            }
-        }
-    }
-
     return $isoInfo
 }
 
@@ -1604,28 +1575,9 @@ function Invoke-VIAHR {
     } 
 
     ConvertTo-LFLineEnding -Files @($CFGname, "grub.cfg")
-    
+
     if(-not $CFGOnly){
         Invoke-ISOCommit -TargetISO $isoInfo.TargetISO -KickstartName $CFGname
-    }
-
-    Write-Host "`n==================================================================================================" -ForegroundColor Green
-    Write-Host "                                        SUCCESS!" -ForegroundColor Green
-    Write-Host "==================================================================================================" -ForegroundColor Green
-    Write-Host "Customized ISO: $($isoInfo.TargetISO)" -ForegroundColor Green
-    if ($isoInfo.BackupPath) {
-        Write-Host "Backup created: $($isoInfo.BackupPath)" -ForegroundColor Green
-    }
-    Write-Host "Appliance Type: $($ApplianceType)" -ForegroundColor Green
-    Write-Host "Mode: $($isoInfo.Mode)" -ForegroundColor Green
-    Write-Host "==================================================================================================" -ForegroundColor Green
-
-    if($CleanupCFGFiles){
-        @("$CFGname", "grub.cfg") | ForEach-Object {
-            if (Test-Path $_) {
-                Remove-Item $_ -Force
-            }
-        }
     }
 
     return $isoInfo
@@ -1676,6 +1628,11 @@ try {
         }
     }
 
+    # Unified success + cleanup (replaces the 4 duplicated blocks that previously
+    # lived at the end of each Invoke-* function).
+    Show-SuccessSummary -ISOInfo $resultISO
+    Remove-TempCfgFile
+
     Write-Log "Script execution completed successfully" 'Info'
 
 } catch {
@@ -1688,13 +1645,7 @@ try {
     Write-Host "Check log file: $logFile" -ForegroundColor Red
     Write-Host "==================================================================================================" -ForegroundColor Red
 
-    if ($CleanupCFGFiles) {
-        @($script:ActiveCfgFile, "grub.cfg") | Where-Object { $_ } | ForEach-Object {
-            if (Test-Path $_ -ErrorAction SilentlyContinue) {
-                Remove-Item $_ -Force -ErrorAction SilentlyContinue
-            }
-        }
-    }
+    Remove-TempCfgFile
 
     if ($isoInfo -and -not $isoInfo.IsInPlace -and (Test-Path $isoInfo.TargetISO -ErrorAction SilentlyContinue)) {
         Write-Log "Cleaning up failed working copy" 'Info'
