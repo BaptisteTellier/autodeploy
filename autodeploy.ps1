@@ -794,10 +794,21 @@ function Set-NetworkConfiguration {
     Write-Log "Network configuration applied" 'Info'
 
     # IPv6 kernel-level disable: --noipv6 on the `network` line is installer-time only.
-    # To prevent the ipv6.ko module from loading on the booted system we also inject
-    # `ipv6.disable=1` into the kernel command line via `bootloader --append=...`.
+    # To prevent the ipv6.ko module from loading on the booted system we inject
+    # `ipv6.disable=1` into the kernel command line via two complementary mechanisms:
+    #   1. `bootloader --append=...` kickstart directive (Anaconda writes to grub.cfg)
+    #   2. sed into /etc/default/grub during %post (survives grub2-mkconfig regeneration
+    #      that the Veeam kickstart does later in the same %post block -- this is the
+    #      one that actually sticks, since Veeam's grub2-mkconfig wipes #1)
     if (-not $EnableIPv6) {
         Add-KernelBootloaderParam -FilePath $FilePath -Token 'ipv6.disable=1'
+
+        $ksContent = Get-Content $FilePath -Raw
+        if ($ksContent -match 'log "Regenerate grub\.cfg"') {
+            Add-ContentAfterLine -FilePath $FilePath -TargetLine 'log "Regenerate grub.cfg"' -NewLines (Get-DisableIPv6PostBlock)
+        } else {
+            Write-Log "Target 'log Regenerate grub.cfg' not found in kickstart; /etc/default/grub IPv6 injection skipped. The bootloader --append directive may not persist if the kickstart regenerates grub.cfg later." 'Warn'
+        }
     }
 }
 
@@ -1003,6 +1014,18 @@ function Get-NodeExporterFirewallBlock {
         "firewall-cmd --permanent --zone=drop --add-port=9100/tcp",
         "firewall-cmd --reload"
         "echo 'Firewall configured for node_exporter 9100/tcp'"
+    )
+}
+
+function Get-DisableIPv6PostBlock {
+    # Injects `ipv6.disable=1` into /etc/default/grub's GRUB_CMDLINE_LINUX so the param
+    # survives the grub2-mkconfig regeneration done later in the Veeam kickstart %post.
+    # Idempotent (grep guard avoids double-add on reruns).
+    return @(
+        '# Disable IPv6 at kernel level (autodeploy EnableIPv6=$false)',
+        '# Inject ipv6.disable=1 into /etc/default/grub so it survives grub2-mkconfig regeneration',
+        'grep -q "ipv6\.disable=1" /etc/default/grub || sed -i ''/^GRUB_CMDLINE_LINUX=/ s/"$/ ipv6.disable=1"/'' /etc/default/grub',
+        'log "IPv6 disabled via /etc/default/grub GRUB_CMDLINE_LINUX"'
     )
 }
 
