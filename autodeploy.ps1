@@ -766,7 +766,7 @@ function Set-NetworkConfiguration {
 
     if (-not $EnableIPv6) {
         $networkLine += " --noipv6"
-        Write-Log "IPv6 disabled (--noipv6 appended)" 'Info'
+        Write-Log "IPv6 disabled (--noipv6 appended to network line)" 'Info'
     }
     
     $content = Get-Content $FilePath
@@ -790,8 +790,59 @@ function Set-NetworkConfiguration {
         }
     }
     
-    Set-Content $FilePath $content 
+    Set-Content $FilePath $content
     Write-Log "Network configuration applied" 'Info'
+
+    # IPv6 kernel-level disable: --noipv6 on the `network` line is installer-time only.
+    # To prevent the ipv6.ko module from loading on the booted system we also inject
+    # `ipv6.disable=1` into the kernel command line via `bootloader --append=...`.
+    if (-not $EnableIPv6) {
+        Add-KernelBootloaderParam -FilePath $FilePath -Token 'ipv6.disable=1'
+    }
+}
+
+function Add-KernelBootloaderParam {
+    # Injects a kernel command-line token via the kickstart `bootloader --append="..."` directive.
+    # If no `bootloader` line exists, a new one is inserted before the first `%pre` block.
+    # Idempotent: re-running with the same token is a no-op.
+    param(
+        [Parameter(Mandatory)][string]$FilePath,
+        [Parameter(Mandatory)][string]$Token
+    )
+
+    $content = Get-Content $FilePath -Raw
+    $escapedToken = [regex]::Escape($Token)
+
+    # Case 1: token already present in some bootloader line -> no-op
+    if ($content -match "(?m)^bootloader[^\r\n]*$escapedToken") {
+        Write-Log "Kernel param '$Token' already present in bootloader line of $FilePath; no change." 'Info'
+        return
+    }
+
+    if ($content -match '(?m)^bootloader\b') {
+        # Case 2: bootloader exists with --append="..." -> extend it
+        if ($content -match '(?m)^(bootloader[^\r\n]*--append=")([^"]*)(")') {
+            $content = $content -replace '(?m)^(bootloader[^\r\n]*--append=")([^"]*)(")', "`${1}`${2} $Token`${3}"
+            Write-Log "Extended existing bootloader --append with '$Token' in $FilePath." 'Info'
+        }
+        # Case 3: bootloader exists without --append -> add --append="..."
+        else {
+            $content = $content -replace '(?m)^(bootloader[^\r\n]*)$', "`${1} --append=`"$Token`""
+            Write-Log "Added --append=`"$Token`" to existing bootloader line in $FilePath." 'Info'
+        }
+    }
+    elseif ($content -match '(?m)^%pre\b') {
+        # Case 4: no bootloader line at all -> insert one before the first %pre
+        $newLines = "# IPv6 disabled at kernel level (autodeploy EnableIPv6=`$false)`nbootloader --append=`"$Token`"`n`n"
+        $content = $content -replace '(?m)^(%pre\b)', "$newLines`${1}"
+        Write-Log "Inserted new 'bootloader --append=`"$Token`"' line before first %pre block in $FilePath." 'Info'
+    }
+    else {
+        Write-Log "No 'bootloader' nor '%pre' line found in $FilePath; cannot inject kernel param '$Token'." 'Warn'
+        return
+    }
+
+    Set-Content $FilePath $content -NoNewline
 }
 
 function Set-DebugSSHModifications {
