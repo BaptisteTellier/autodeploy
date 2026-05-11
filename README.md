@@ -22,10 +22,7 @@ This advanced PowerShell script automates the customization of Veeam Software Ap
 - Built-in defaults are applied first; any key present in the JSON overrides them. Keys absent from the JSON keep their default value.
 - Unknown JSON keys are logged as warnings (typo detection).
 - `NtpServer` JSON key now accepts an array of servers (e.g. `["ntp1.example.local", "ntp2.example.local"]`) rendered as `ntp.servers=ntp1;ntp2` in the kickstart. Single-string form remains supported (backward-compatible).
-- New JSON key `EnableIPv6` (default `true`). Set to `false` to fully disable IPv6 on the deployed appliance via three layers:
-  1. `--noipv6` appended to the kickstart `network` line (installer-time)
-  2. `bootloader --append="ipv6.disable=1"` injected (new line inserted before the first `%pre` block when the kickstart has no `bootloader` directive, as is the case for Veeam)
-  3. `sed` injection in the `%post` block to add `ipv6.disable=1` to `/etc/default/grub` `GRUB_CMDLINE_LINUX` — this is the layer that actually persists, because the Veeam `%post` regenerates `/boot/grub2/grub.cfg` via `grub2-mkconfig`, wiping layer 2 unless the source `/etc/default/grub` also has the param.
+- New JSON key `EnableIPv6` (default `true`). 
 
 ## What's New (v2.6)
 - Now requires PowerShell 7+ 
@@ -179,7 +176,7 @@ https://www.veeam.com/kb4772
     "VeeamSoIsMfaEnabled": "true",
     "VeeamSoRecoveryToken": "12345678-90ab-cdef-1234-567890abcdef",
     "VeeamSoIsEnabled": "true",
-    "NtpServer": "time.nist.gov",
+    "NtpServer": ["time.nist.gov", "0.fr.pool.ntp.org],
     "NtpRunSync": "true",
     "NodeExporter": false,
     "LicenseVBRTune": false,
@@ -239,7 +236,7 @@ https://www.veeam.com/kb4772
 | Subnet      | String   | Subnet mask                     | 255.255.255.0   |
 | Gateway     | String   | Gateway IP                      | 192.168.1.1     |
 | DNSServers  | Array    | DNS servers (comma-separated)   | ["192.168.1.64", "8.8.4.4"] |
-| EnableIPv6  | Bool     | Enable IPv6 on the appliance. When `false`: `--noipv6` on network line + `bootloader --append="ipv6.disable=1"` + sed injection into `/etc/default/grub` GRUB_CMDLINE_LINUX (survives `grub2-mkconfig`) | true |
+| EnableIPv6  | Bool     | Enable IPv6 on the appliance.   | true |
 
 ### Veeam Security Appliance Parameters
 
@@ -253,7 +250,7 @@ https://www.veeam.com/kb4772
 | VeeamSoIsMfaEnabled | String | Enable/disable multi-factor authentication for SO account ("true"/"false") | `"true"` |
 | VeeamSoRecoveryToken | String | GUID-format recovery token for SO account emergency access and recovery scenarios | `eb9fcbf4-2be6-e94d-4203-dded67c5a450` |
 | VeeamSoIsEnabled | String | Enable/disable the Security Officer account entirely ("true"/"false") | `"true"` |
-| NtpServer | String OR Array&lt;String&gt; | NTP server(s) for time synchronization (FQDN or IP). Single string for one server, array for multiple — e.g. `["ntp1.example.local","ntp2.example.local"]` renders as `ntp.servers=ntp1;ntp2` | `["time.nist.gov"]` |
+| NtpServer | String OR Array&lt;String&gt; | NTP server(s) for time synchronization (FQDN or IP). Single string for one server, array for multiple — e.g. `["ntp1.example.local","ntp2.example.local"]` | `["time.nist.gov"]` |
 | NtpRunSync | String | Enable automatic time synchronization on boot ("true"/"false") - if sync fails customization fails | `"true"` |
 
 ### Optional Features
@@ -304,6 +301,12 @@ https://www.veeam.com/kb4772
 ---
 
 ## How Optional Feature works :
+
+### Disable ipv6
+Set to `false` to fully disable IPv6 on the deployed appliance via three layers:
+  1. `--noipv6` appended to the kickstart `network` line (installer-time)
+  2. `bootloader --append="ipv6.disable=1"` injected (new line inserted before the first `%pre` block when the kickstart has no `bootloader` directive, as is the case for Veeam)
+  3. `sed` injection in the `%post` block to add `ipv6.disable=1` to `/etc/default/grub` `GRUB_CMDLINE_LINUX` — this is the layer that actually persists, because the Veeam `%post` regenerates `/boot/grub2/grub.cfg` via `grub2-mkconfig`, wiping layer 2 unless the source `/etc/default/grub` also has the param.
 
 ### Node_Exporter
 The script install node_exporter from offline repo
@@ -363,11 +366,11 @@ Process completed successfully
 ```
 - install curl and oathtool from offline repo and then removes oathtool
 
+
 ---
 
 ## Known issues
 - If you enable NtpRunSync and it fails, customization fails
-- Using static IP doesn't set DNS properly : BUG in VSA, will be fix by Veeam. **Workaround :** DHCP or Enter Network in TUI parameter and Apply
 - If it boots on the init wizard but it's already fully configured and you cannot go through. wait 2-3min. Then check `/var/log/veeam_init.log` (ctrl+alt+F2-F3 etc... to change TTY ) - something went wrong. **Workaround :** Reinstall
 
 ## Troubleshooting
