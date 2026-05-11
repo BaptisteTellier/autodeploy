@@ -544,6 +544,9 @@ function Get-ModificationSummary {
         $summary += "  Network: Static IP ($StaticIP/$Subnet via $Gateway)"
         $summary += "  DNS: $($DNSServers -join ', ')"
     }
+    if (-not $EnableIPv6) {
+        $summary += "  IPv6: Disabled (--noipv6)"
+    }
 
     $summary += ""
     $summary += "OPTIONAL FEATURES:"
