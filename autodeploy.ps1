@@ -1191,7 +1191,7 @@ function Invoke-VSA {
     
     Write-Host "`n$(Get-ModificationSummary -ISOInfo $isoInfo)" -ForegroundColor Yellow
     Write-Host "`nPress Enter to continue or Ctrl+C to abort..." -ForegroundColor Cyan
-    Read-Host
+    $null = Read-Host  # discard return value -- otherwise it pollutes the function pipeline
 
     Write-Log "Extracting configuration files from ISO..." 'Info'
 
@@ -1342,7 +1342,7 @@ function Invoke-VIA {
     
     Write-Host "`n$(Get-ModificationSummary -ISOInfo $isoInfo)" -ForegroundColor Yellow
     Write-Host "`nPress Enter to continue or Ctrl+C to abort..." -ForegroundColor Cyan
-    Read-Host
+    $null = Read-Host  # discard return value -- otherwise it pollutes the function pipeline
 
     Write-Log "Extracting configuration files from ISO..." 'Info'
 
@@ -1436,7 +1436,7 @@ function Invoke-VIAVMware {
     
     Write-Host "`n$(Get-ModificationSummary -ISOInfo $isoInfo)" -ForegroundColor Yellow
     Write-Host "`nPress Enter to continue or Ctrl+C to abort..." -ForegroundColor Cyan
-    Read-Host
+    $null = Read-Host  # discard return value -- otherwise it pollutes the function pipeline
 
     Write-Log "Extracting configuration files from ISO..." 'Info'
 
@@ -1526,7 +1526,7 @@ function Invoke-VIAHR {
     
     Write-Host "`n$(Get-ModificationSummary -ISOInfo $isoInfo)" -ForegroundColor Yellow
     Write-Host "`nPress Enter to continue or Ctrl+C to abort..." -ForegroundColor Cyan
-    Read-Host
+    $null = Read-Host  # discard return value -- otherwise it pollutes the function pipeline
 
     Write-Log "Extracting configuration files from ISO..." 'Info'
 
