@@ -15,6 +15,7 @@
   "Subnet": "255.255.255.0",
   "Gateway": "192.168.1.1",
   "DNSServers": ["192.168.1.64", "8.8.8.4", "8.8.8.8"],
+  "EnableIPv6": true,
   "VeeamAdminPassword": "123q123Q123!123",
   "VeeamAdminMfaSecretKey": "JBSWY3DPEHPK3PXP",
   "VeeamAdminIsMfaEnabled": "true",
