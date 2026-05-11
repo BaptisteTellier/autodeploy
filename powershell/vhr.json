@@ -1,7 +1,7 @@
 {
   "SourceISO": "VeeamInfrastructureAppliance_13.0.1.180_20251101.iso",
-  "OutputISO": "VIA_13.0.1.180_20251101.iso",
-  "ApplianceType": "VIA",
+  "OutputISO": "VHR_13.0.1.180_20251101.iso",
+  "ApplianceType": "VIAHR",
   "InPlace": false,
   "CreateBackup": true,
   "CleanupCFGFiles": false,
@@ -9,7 +9,7 @@
   "GrubTimeout": 0,
   "KeyboardLayout": "fr",
   "Timezone": "Europe/Paris",
-  "Hostname": "VIAPROXY",
+  "Hostname": "VHR",
   "UseDHCP": true,
   "StaticIP": "192.168.1.147",
   "Subnet": "255.255.255.0",
@@ -23,8 +23,8 @@
   "VeeamSoIsMfaEnabled": "true",
   "VeeamSoRecoveryToken": "12345678-90ab-cdef-1234-567890abcdef",
   "VeeamSoIsEnabled": "true",
-  "NtpServer": ["time.nist.gov", "0.fr.pool.ntp.org", "1.fr.pool.ntp.org"],
+  "NtpServer": "time.nist.gov",
   "NtpRunSync": "true",
-  "NodeExporter": false,
-  "Debug": false
+  "NodeExporter": true,
+  "Debug": true
 }

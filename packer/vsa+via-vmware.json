@@ -1,0 +1,91 @@
+{
+  "builders": [
+    {
+      "type": "vmware-iso",
+	  "name": "vm-1",
+      "iso_url": "file:///K:/autodeploy%20vsa/test/VeeamSoftwareAppliance_13.0.1.180_20251101.iso",
+      "iso_checksum": "none",
+      "output_directory": "K:/autodeploy vsa/packer/VM",
+      "vm_name": "vbr-packer",
+      "guest_os_type": "rhel9-64",
+      "version": 22,
+      "firmware": "efi",
+	  "cdrom_adapter_type": "sata",
+      "communicator": "ssh",
+      "ssh_username": "root",
+      "ssh_password": "votre_mot_de_passe_kickstart",
+      "ssh_timeout": "24h",
+      "disk_size": 262144,
+      "disk_additional_size": [262144],
+      "disk_adapter_type": "nvme",
+	  "network_adapter_type": "vmxnet3",
+      "memory": 16384,
+      "cpus": 8,
+	  "keep_registered": true,
+      "boot_wait": "5s",
+      "http_directory": "http",
+      "network": "nat",
+      "boot_command": [
+        "<wait><enter><wait>e<wait><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><wait>linuxefi /images/pxeboot/vmlinuz inst.stage2=hd:LABEL=VeeamSA inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/vbr-ks.cfg quiet inst.assumeyes<wait><enter><wait> initrdefi /images/pxeboot/initrd.img  <enter><wait><f10><wait>"
+      ]
+    },
+	{
+      "type": "vmware-iso",
+	  "name": "vm-2",
+      "iso_url": "file:///K:/autodeploy%20vsa/test/VeeamInfrastructureAppliance_13.0.1.180_20251101.iso",
+      "iso_checksum": "none",
+      "output_directory": "K:/autodeploy vsa/packer/VMproxy",
+      "vm_name": "via-proxy",
+      "guest_os_type": "rhel9-64",
+      "version": 22,
+      "firmware": "efi",
+	  "cdrom_adapter_type": "sata",
+      "communicator": "ssh",
+      "ssh_username": "root",
+      "ssh_password": "votre_mot_de_passe_kickstart",
+      "ssh_timeout": "24h",
+      "disk_size": 262144,
+      "disk_additional_size": [262144],
+      "disk_adapter_type": "nvme",
+	  "network_adapter_type": "vmxnet3",
+      "memory": 16384,
+      "cpus": 8,
+	  "keep_registered": true,
+      "boot_wait": "5s",
+      "http_directory": "http",
+      "network": "nat",
+      "boot_command": [
+        "<wait><enter><wait>e<wait><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><wait>linuxefi /images/pxeboot/vmlinuz inst.stage2=hd:LABEL=VeeamJeOS inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/proxy-ks.cfg quiet inst.assumeyes<wait><enter><wait>initrdefi /images/pxeboot/initrd.img  <enter><wait><f10><wait>"
+      ]
+    },
+	{
+      "type": "vmware-iso",
+	  "name": "vm-3",
+      "iso_url": "file:///K:/autodeploy%20vsa/test/VeeamInfrastructureAppliance_13.0.1.180_20251101.iso",
+      "iso_checksum": "none",
+      "output_directory": "K:/autodeploy vsa/packer/VMHR",
+      "vm_name": "via-hr",
+      "guest_os_type": "rhel9-64",
+      "version": 22,
+      "firmware": "efi",
+	  "cdrom_adapter_type": "sata",
+      "communicator": "ssh",
+      "ssh_username": "root",
+      "ssh_password": "votre_mot_de_passe_kickstart",
+      "ssh_timeout": "24h",
+      "disk_size": 262144,
+      "disk_additional_size": [262144],
+      "disk_adapter_type": "nvme",
+	  "network_adapter_type": "vmxnet3",
+      "memory": 16384,
+      "cpus": 8,
+	  "keep_registered": true,
+      "boot_wait": "5s",
+      "http_directory": "http",
+      "network": "nat",
+      "boot_command": [
+        "<wait><enter><wait>e<wait><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><del><wait> linuxefi /images/pxeboot/vmlinuz inst.stage2=hd:LABEL=VeeamJeOS quiet inst.assumeyes inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/hardened-repo-ks.cfg<wait><enter><wait> initrdefi /images/pxeboot/initrd.img  <enter><wait><f10><wait>"
+      ]
+    }
+  ]
+}
