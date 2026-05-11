@@ -21,7 +21,7 @@ This advanced PowerShell script automates the customization of Veeam Software Ap
 - **JSON-only mode (BREAKING)**: `-ConfigFile` is now the only CLI argument; all other settings MUST come from the JSON file. CLI overrides are no longer supported.
 - Built-in defaults are applied first; any key present in the JSON overrides them. Keys absent from the JSON keep their default value.
 - Unknown JSON keys are logged as warnings (typo detection).
-- TO DO : Multiple NTP
+- `NtpServer` JSON key now accepts an array of servers (e.g. `["ntp1.example.local", "ntp2.example.local"]`) rendered as `ntp.servers=ntp1;ntp2` in the kickstart. Single-string form remains supported (backward-compatible).
 - TO DO : Disable IPV6
 
 ## What's New (v2.6)
@@ -248,7 +248,7 @@ https://www.veeam.com/kb4772
 | VeeamSoIsMfaEnabled | String | Enable/disable multi-factor authentication for SO account ("true"/"false") | `"true"` |
 | VeeamSoRecoveryToken | String | GUID-format recovery token for SO account emergency access and recovery scenarios | `eb9fcbf4-2be6-e94d-4203-dded67c5a450` |
 | VeeamSoIsEnabled | String | Enable/disable the Security Officer account entirely ("true"/"false") | `"true"` |
-| NtpServer | String | Network Time Protocol server for time synchronization (FQDN or IP address) | `time.nist.gov` |
+| NtpServer | String OR Array&lt;String&gt; | NTP server(s) for time synchronization (FQDN or IP). Single string for one server, array for multiple — e.g. `["ntp1.example.local","ntp2.example.local"]` renders as `ntp.servers=ntp1;ntp2` | `["time.nist.gov"]` |
 | NtpRunSync | String | Enable automatic time synchronization on boot ("true"/"false") - if sync fails customization fails | `"true"` |
 
 ### Optional Features

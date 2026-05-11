@@ -162,12 +162,15 @@ Recommended setting is "true" for enterprise deployments requiring role separati
 Default: "true"
 
 .PARAMETER NtpServer
-Network Time Protocol (NTP) server for system time synchronization.
-Accepts either fully qualified domain name (FQDN) or IP address.
+Network Time Protocol (NTP) server(s) for system time synchronization.
+Accepts EITHER a single string OR an array of strings (FQDN or IP address).
+- Single server (string form, backward-compatible): "time.nist.gov"
+- Multiple servers (array form):                  ["ntp1.example.local", "ntp2.example.local"]
+When multiple servers are provided, they are rendered as `ntp.servers=ntp1;ntp2;...` (semicolon-separated)
+in /etc/veeam/vbr_init.cfg, matching the Veeam host manager format.
 Proper time synchronization is critical for Veeam operations, backup scheduling, and certificate validation.
 Recommended to use your organization's internal NTP servers or reliable public pools.
-Examples: "pool.ntp.org", "time.windows.com", "192.168.1.10"
-Default: "time.nist.gov"
+Default: @("time.nist.gov")
 
 .PARAMETER NodeExporter
 Boolean flag to enable node_exporter deployment. 
@@ -333,7 +336,7 @@ function Set-DefaultParameter {
         VeeamSoIsMfaEnabled      = "true"
         VeeamSoRecoveryToken     = "eb9fcbf4-2be6-e94d-4203-dded67c5a450"
         VeeamSoIsEnabled         = "true"
-        NtpServer                = "time.nist.gov"
+        NtpServer                = @("time.nist.gov")
         NtpRunSync               = "true"
         NodeExporter             = $false
         LicenseVBRTune           = $false
@@ -375,6 +378,10 @@ function Update-ParametersFromJSON {
     if ($unknown) {
         Write-Log "JSON contains unknown keys (ignored): $($unknown -join ', ')" 'Warn'
     }
+
+    # Backward-compat: NtpServer accepts either a string ("a") or an array (["a","b","c"]).
+    # Normalize to array form so Get-VeeamHostConfigBlock can always use $NtpServer -join ';'.
+    if ($script:NtpServer -isnot [array]) { $script:NtpServer = @($script:NtpServer) }
 
     Write-Log "Applied $parametersUpdated parameters from JSON configuration" 'Info'
 }
@@ -913,7 +920,7 @@ function Get-VeeamHostConfigBlock {
         "veeamso.isMfaEnabled=$VeeamSoIsMfaEnabled",
         "veeamso.recoveryToken=$VeeamSoRecoveryToken",
         "veeamso.isEnabled=$VeeamSoIsEnabled",
-        "ntp.servers=$NtpServer",
+        "ntp.servers=$($NtpServer -join ';')",
         "ntp.runSync=$NtpRunSync",
         "vbr_control.runInitIso=true",
         "vbr_control.runStart=true",
