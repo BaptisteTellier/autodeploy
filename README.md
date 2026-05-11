@@ -22,7 +22,7 @@ This advanced PowerShell script automates the customization of Veeam Software Ap
 - Built-in defaults are applied first; any key present in the JSON overrides them. Keys absent from the JSON keep their default value.
 - Unknown JSON keys are logged as warnings (typo detection).
 - `NtpServer` JSON key now accepts an array of servers (e.g. `["ntp1.example.local", "ntp2.example.local"]`) rendered as `ntp.servers=ntp1;ntp2` in the kickstart. Single-string form remains supported (backward-compatible).
-- TO DO : Disable IPV6
+- New JSON key `EnableIPv6` (default `true`). Set to `false` to disable IPv6 on the deployed appliance — the kickstart `network` line gets `--noipv6` appended.
 
 ## What's New (v2.6)
 - Now requires PowerShell 7+ 
@@ -167,6 +167,7 @@ https://www.veeam.com/kb4772
     "Subnet": "255.255.255.0",
     "Gateway": "192.168.1.1",
     "DNSServers": ["192.168.1.64", "8.8.8.4", "8.8.8.8"],
+    "EnableIPv6": true,
     "VeeamAdminPassword": "123q123Q123!123",
     "VeeamAdminMfaSecretKey": "JBSWY3DPEHPK3PXP",
     "VeeamAdminIsMfaEnabled": "true",
@@ -235,6 +236,7 @@ https://www.veeam.com/kb4772
 | Subnet      | String   | Subnet mask                     | 255.255.255.0   |
 | Gateway     | String   | Gateway IP                      | 192.168.1.1     |
 | DNSServers  | Array    | DNS servers (comma-separated)   | ["192.168.1.64", "8.8.4.4"] |
+| EnableIPv6  | Bool     | Enable IPv6 on the appliance NIC. When `false`, appends `--noipv6` to the kickstart network line | true |
 
 ### Veeam Security Appliance Parameters
 

@@ -108,6 +108,13 @@ Must be a valid IPv4 address format. Example: "192.168.1.1"
 Array of DNS server IP addresses for static network configuration.
 Default: @("192.168.1.64", "8.8.4.4")
 
+.PARAMETER EnableIPv6
+Enable IPv6 on the deployed appliance's network interface.
+When set to $false, the kickstart `network` line gets `--noipv6` appended,
+disabling IPv6 at install time on the appliance.
+JSON note: must be a real boolean (`true` / `false`), not a string.
+Default: $true
+
 ##### Veeam Security Configuration #####
 
 .PARAMETER VeeamAdminPassword
@@ -299,7 +306,7 @@ function Import-JSONConfig {
 $script:KnownParameters = @(
     'ApplianceType', 'SourceISO', 'OutputISO', 'InPlace', 'CreateBackup',
     'CleanupCFGFiles', 'CFGOnly', 'GrubTimeout', 'KeyboardLayout', 'Timezone',
-    'Hostname', 'UseDHCP', 'StaticIP', 'Subnet', 'Gateway', 'DNSServers',
+    'Hostname', 'UseDHCP', 'StaticIP', 'Subnet', 'Gateway', 'DNSServers', 'EnableIPv6',
     'VeeamAdminPassword', 'VeeamAdminMfaSecretKey', 'VeeamAdminIsMfaEnabled',
     'VeeamSoPassword', 'VeeamSoMfaSecretKey', 'VeeamSoIsMfaEnabled',
     'VeeamSoRecoveryToken', 'VeeamSoIsEnabled', 'NtpServer', 'NtpRunSync',
@@ -328,6 +335,7 @@ function Set-DefaultParameter {
         Subnet                   = "255.255.255.0"
         Gateway                  = "192.168.1.1"
         DNSServers               = @("192.168.1.64", "8.8.4.4")
+        EnableIPv6               = $true
         VeeamAdminPassword       = "123q123Q123!123"
         VeeamAdminMfaSecretKey   = "JBSWY3DPEHPK3PXP"
         VeeamAdminIsMfaEnabled   = "true"
@@ -738,7 +746,8 @@ function Set-NetworkConfiguration {
         [string]$StaticIP,
         [string]$Subnet,
         [string]$Gateway,
-        [string[]]$DNSServers
+        [string[]]$DNSServers,
+        [bool]$EnableIPv6 = $true
     )
 
     Write-Log "Configuring network settings" 'Info'
@@ -750,6 +759,11 @@ function Set-NetworkConfiguration {
         $DNSList = $DNSServers -join ","
         $networkLine = "network --bootproto=static --ip=$StaticIP --netmask=$Subnet --gateway=$Gateway --nameserver=$DNSList --hostname=$Hostname"
         Write-Log "Using static IP configuration: $StaticIP" 'Info'
+    }
+
+    if (-not $EnableIPv6) {
+        $networkLine += " --noipv6"
+        Write-Log "IPv6 disabled (--noipv6 appended)" 'Info'
     }
     
     $content = Get-Content $FilePath
@@ -1215,9 +1229,9 @@ function Invoke-VSA {
     Set-Timezone -FilePath "vbr-ks.cfg" -TimezoneValue $Timezone
 
     if ($UseDHCP) {
-        Set-NetworkConfiguration -FilePath "vbr-ks.cfg" -Hostname $Hostname -UseDHCP:$true
+        Set-NetworkConfiguration -FilePath "vbr-ks.cfg" -Hostname $Hostname -UseDHCP:$true -EnableIPv6 $EnableIPv6
     } else {
-        Set-NetworkConfiguration -FilePath "vbr-ks.cfg" -Hostname $Hostname -StaticIP $StaticIP -Subnet $Subnet -Gateway $Gateway -DNSServers $DNSServers
+        Set-NetworkConfiguration -FilePath "vbr-ks.cfg" -Hostname $Hostname -StaticIP $StaticIP -Subnet $Subnet -Gateway $Gateway -DNSServers $DNSServers -EnableIPv6 $EnableIPv6
     }
 
     Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine "mkdir -p /var/log/veeam/" -NewLines @("touch /etc/veeam/cockpit_auto_test_disable_init")
@@ -1359,9 +1373,9 @@ function Invoke-VIA {
     Set-Timezone -FilePath "$CFGname" -TimezoneValue $Timezone
 
     if ($UseDHCP) {
-        Set-NetworkConfiguration -FilePath "$CFGname" -Hostname $Hostname -UseDHCP:$true
+        Set-NetworkConfiguration -FilePath "$CFGname" -Hostname $Hostname -UseDHCP:$true -EnableIPv6 $EnableIPv6
     } else {
-        Set-NetworkConfiguration -FilePath "$CFGname" -Hostname $Hostname -StaticIP $StaticIP -Subnet $Subnet -Gateway $Gateway -DNSServers $DNSServers
+        Set-NetworkConfiguration -FilePath "$CFGname" -Hostname $Hostname -StaticIP $StaticIP -Subnet $Subnet -Gateway $Gateway -DNSServers $DNSServers -EnableIPv6 $EnableIPv6
     }
 
     Add-ContentAfterLine -FilePath "$CFGname" -TargetLine "mkdir -p /var/log/veeam/" -NewLines @("touch /etc/veeam/cockpit_auto_test_disable_init")
@@ -1453,9 +1467,9 @@ function Invoke-VIAVMware {
     Set-Timezone -FilePath "$CFGname" -TimezoneValue $Timezone
 
     if ($UseDHCP) {
-        Set-NetworkConfiguration -FilePath "$CFGname" -Hostname $Hostname -UseDHCP:$true
+        Set-NetworkConfiguration -FilePath "$CFGname" -Hostname $Hostname -UseDHCP:$true -EnableIPv6 $EnableIPv6
     } else {
-        Set-NetworkConfiguration -FilePath "$CFGname" -Hostname $Hostname -StaticIP $StaticIP -Subnet $Subnet -Gateway $Gateway -DNSServers $DNSServers
+        Set-NetworkConfiguration -FilePath "$CFGname" -Hostname $Hostname -StaticIP $StaticIP -Subnet $Subnet -Gateway $Gateway -DNSServers $DNSServers -EnableIPv6 $EnableIPv6
     }
 
     Add-ContentAfterLine -FilePath "$CFGname" -TargetLine "mkdir -p /var/log/veeam/" -NewLines @("touch /etc/veeam/cockpit_auto_test_disable_init")
@@ -1543,9 +1557,9 @@ function Invoke-VIAHR {
     Set-Timezone -FilePath "$CFGname" -TimezoneValue $Timezone
 
     if ($UseDHCP) {
-        Set-NetworkConfiguration -FilePath "$CFGname" -Hostname $Hostname -UseDHCP:$true
+        Set-NetworkConfiguration -FilePath "$CFGname" -Hostname $Hostname -UseDHCP:$true -EnableIPv6 $EnableIPv6
     } else {
-        Set-NetworkConfiguration -FilePath "$CFGname" -Hostname $Hostname -StaticIP $StaticIP -Subnet $Subnet -Gateway $Gateway -DNSServers $DNSServers
+        Set-NetworkConfiguration -FilePath "$CFGname" -Hostname $Hostname -StaticIP $StaticIP -Subnet $Subnet -Gateway $Gateway -DNSServers $DNSServers -EnableIPv6 $EnableIPv6
     }
 
     Add-ContentAfterLine -FilePath "$CFGname" -TargetLine "mkdir -p /var/log/veeam/" -NewLines @("touch /etc/veeam/cockpit_auto_test_disable_init")
