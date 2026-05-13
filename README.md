@@ -22,7 +22,6 @@ This advanced PowerShell script automates the customization of Veeam Software Ap
 - Built-in defaults are applied first; any key present in the JSON overrides them. Keys absent from the JSON keep their default value.
 - Unknown JSON keys are logged as warnings (typo detection).
 - `NtpServer` JSON key now accepts an array of servers (e.g. `["ntp1.example.local", "ntp2.example.local"]`) rendered as `ntp.servers=ntp1;ntp2` in the kickstart. Single-string form remains supported (backward-compatible).
-- New JSON key `EnableIPv6` (default `true`). 
 
 ## What's New (v2.6)
 - Now requires PowerShell 7+ 
@@ -167,7 +166,6 @@ https://www.veeam.com/kb4772
     "Subnet": "255.255.255.0",
     "Gateway": "192.168.1.1",
     "DNSServers": ["192.168.1.64", "8.8.8.4", "8.8.8.8"],
-    "EnableIPv6": true,
     "VeeamAdminPassword": "123q123Q123!123",
     "VeeamAdminMfaSecretKey": "JBSWY3DPEHPK3PXP",
     "VeeamAdminIsMfaEnabled": "true",
@@ -236,7 +234,6 @@ https://www.veeam.com/kb4772
 | Subnet      | String   | Subnet mask                     | 255.255.255.0   |
 | Gateway     | String   | Gateway IP                      | 192.168.1.1     |
 | DNSServers  | Array    | DNS servers (comma-separated)   | ["192.168.1.64", "8.8.4.4"] |
-| EnableIPv6  | Bool     | Enable IPv6 on the appliance.   | true |
 
 ### Veeam Security Appliance Parameters
 
@@ -301,12 +298,6 @@ https://www.veeam.com/kb4772
 ---
 
 ## How Optional Feature works :
-
-### Disable ipv6
-Set to `false` to fully disable IPv6 on the deployed appliance via three layers:
-  1. `--noipv6` appended to the kickstart `network` line (installer-time)
-  2. `bootloader --append="ipv6.disable=1"` injected (new line inserted before the first `%pre` block when the kickstart has no `bootloader` directive, as is the case for Veeam)
-  3. `sed` injection in the `%post` block to add `ipv6.disable=1` to `/etc/default/grub` `GRUB_CMDLINE_LINUX` — this is the layer that actually persists, because the Veeam `%post` regenerates `/boot/grub2/grub.cfg` via `grub2-mkconfig`, wiping layer 2 unless the source `/etc/default/grub` also has the param.
 
 ### Node_Exporter
 The script install node_exporter from offline repo
