@@ -11,11 +11,17 @@
 
 This advanced PowerShell script automates the customization of Veeam Software Appliance ISO files, enabling fully automated, unattended appliance deployments with enterprise-grade, reusable configurations. It supports JSON configuration loading, out-of-place ISO modification, advanced logging, and optional IS backup creation. Network, security, and monitoring details can be configured to fit enterprise environments.
 
-- Tested on build 13.0.0.4967_20250822 & 13.0.1.180_20251101
+- Tested on build 13.0.0.4967_20250822 & 13.0.1.180_20251101 & 13.0.1.2067_20260310
 - For Auto-Deployment PowerShell exemple : [Powershell Folder](https://github.com/BaptisteTellier/autodeploy/tree/main/powershell)
 - For Packer remote kickstart exemple : [Packer Folder](https://github.com/BaptisteTellier/autodeploy/tree/main/packer)
 - Youtube video - French audi with Eng Sub : [Part 1](https://www.youtube.com/watch?v=Ri877QyX6i8) [Part 2](https://www.youtube.com/watch?v=fIvcHSPhUUM) [Part 3](https://www.youtube.com/watch?v=MwQcrLufKDU) [Part 4](https://www.youtube.com/watch?v=O56TzfvDNT0) [Part 5](https://www.youtube.com/watch?v=-LA9wKzujyA)
 ---
+
+## What's New (v2.7)
+- **JSON-only mode (BREAKING)**: `-ConfigFile` is now the only CLI argument; all other settings MUST come from the JSON file. CLI overrides are no longer supported.
+- Built-in defaults are applied first; any key present in the JSON overrides them. Keys absent from the JSON keep their default value.
+- Unknown JSON keys are logged as warnings (typo detection).
+- `NtpServer` JSON key now accepts an array of servers (e.g. `["ntp1.example.local", "ntp2.example.local"]`) rendered as `ntp.servers=ntp1;ntp2` in the kickstart. Single-string form remains supported (backward-compatible).
 
 ## What's New (v2.6)
 - Now requires PowerShell 7+ 
@@ -136,7 +142,9 @@ https://www.veeam.com/kb4772
 
 ## Quick Start
 
-### Using JSON Configuration (Recommended)
+### Using JSON Configuration (Required)
+
+> Since v2.7, the JSON config file is **mandatory**. `-ConfigFile` is the only CLI argument the script accepts; every other setting MUST be defined in the JSON.
 
 1. Create a JSON configuration file like the example below or download it from the repo :
 
@@ -166,7 +174,7 @@ https://www.veeam.com/kb4772
     "VeeamSoIsMfaEnabled": "true",
     "VeeamSoRecoveryToken": "12345678-90ab-cdef-1234-567890abcdef",
     "VeeamSoIsEnabled": "true",
-    "NtpServer": "time.nist.gov",
+    "NtpServer": ["time.nist.gov", "0.fr.pool.ntp.org],
     "NtpRunSync": "true",
     "NodeExporter": false,
     "LicenseVBRTune": false,
@@ -198,11 +206,13 @@ https://www.veeam.com/kb4772
 
 ## Configuration Parameters
 
+> All keys below are **JSON config keys** (since v2.7). The only CLI argument is `-ConfigFile <path-to-json>`. Any key omitted from the JSON keeps its built-in default.
+
 ### Core Parameters
 
 | Parameter | Type   | Description                      | Default                                   | Required     |
 |-----------|--------|----------------------------------|-------------------------------------------|-------------|
-| ConfigFile    | String | Path to JSON file                 | ""                                        | No          |
+| `-ConfigFile` (CLI only) | String | Path to the JSON configuration file (the ONLY CLI argument) | _(none)_ | **Yes** |
 | SourceISO     | String | Source ISO filename (required)    | VeeamSoftwareAppliance_13.0.0.4967_20250822.iso | Yes         |
 | OutputISO     | String | Customized ISO filename           | auto (adds _customized)                   | No          |
 | ApplianceType    | String | VSA, VIA, VIAVMware, and VIAHR | VSA                                       | No          |
@@ -237,7 +247,7 @@ https://www.veeam.com/kb4772
 | VeeamSoIsMfaEnabled | String | Enable/disable multi-factor authentication for SO account ("true"/"false") | `"true"` |
 | VeeamSoRecoveryToken | String | GUID-format recovery token for SO account emergency access and recovery scenarios | `eb9fcbf4-2be6-e94d-4203-dded67c5a450` |
 | VeeamSoIsEnabled | String | Enable/disable the Security Officer account entirely ("true"/"false") | `"true"` |
-| NtpServer | String | Network Time Protocol server for time synchronization (FQDN or IP address) | `time.nist.gov` |
+| NtpServer | String OR Array&lt;String&gt; | NTP server(s) for time synchronization (FQDN or IP). Single string for one server, array for multiple — e.g. `["ntp1.example.local","ntp2.example.local"]` | `["time.nist.gov"]` |
 | NtpRunSync | String | Enable automatic time synchronization on boot ("true"/"false") - if sync fails customization fails | `"true"` |
 
 ### Optional Features
@@ -347,11 +357,11 @@ Process completed successfully
 ```
 - install curl and oathtool from offline repo and then removes oathtool
 
+
 ---
 
 ## Known issues
 - If you enable NtpRunSync and it fails, customization fails
-- Using static IP doesn't set DNS properly : BUG in VSA, will be fix by Veeam. **Workaround :** DHCP or Enter Network in TUI parameter and Apply
 - If it boots on the init wizard but it's already fully configured and you cannot go through. wait 2-3min. Then check `/var/log/veeam_init.log` (ctrl+alt+F2-F3 etc... to change TTY ) - something went wrong. **Workaround :** Reinstall
 
 ## Troubleshooting
@@ -363,7 +373,7 @@ Process completed successfully
 - If you just installed WSL, you might have permission issue, reboot Windows
 - Confirm ISO file is located in the same directory as the script
 - Use correct JSON structure with all parameters
-- You **cannot override** parameters in CLI if you use JSON
+- All parameters MUST be defined in the JSON file. Since v2.7 the only CLI argument the script accepts is `-ConfigFile`; any other CLI argument is rejected by PowerShell as unknown.
 - If you use optionnal features: check prerequisite and folder structure
 - Use `$CFGOnly=true` to verify your kickstart file contain all Configurations Blocks
 - Check log file `ISO_Customization.log` for timestamped error messages
@@ -417,22 +427,6 @@ Process completed successfully
 
 1. Fork this repo and create a pull request to suggest improvements.
 2. Use [GitHub Issues](https://github.com/PleXi00/autodeploy/issues) for bugs or feature requests.
-
----
-
-## TO DO
-
-- [x] Parameters to change Hostname ✅ **Completed**
-- [x] Function to change IP / DHCP ✅ **Completed**
-- [x] Support for multiple ISO formats (JEoS & VSA) ✅ **Completed**
-- [x] Automated backup creation before modification ✅ **Completed**
-- [x] Support for JSON configuration file ✅ **Completed**
-- [x] Automated Restore Configuration ✅ **Completed**
-- [x] Automated Restore Configuration offline ✅ **Completed**
-- [ ] Test Automated Restore Configuration offline with RTM/GA
-- [x] Add offline repo support for node_exporter instead of binary ✅ **Completed**
-- [ ] Remove curl after install to only keep curl-minimal (automated conf restore)
-
 
 ## Support
 

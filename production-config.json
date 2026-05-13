@@ -23,7 +23,7 @@
   "VeeamSoIsMfaEnabled": "true",
   "VeeamSoRecoveryToken": "12345678-90ab-cdef-1234-567890abcdef",
   "VeeamSoIsEnabled": "true",
-  "NtpServer": "time.nist.gov",
+  "NtpServer": ["time.nist.gov", "0.fr.pool.ntp.org", "1.fr.pool.ntp.org"],
   "NtpRunSync": "true",
   "NodeExporter": false,
   "LicenseVBRTune": false,
