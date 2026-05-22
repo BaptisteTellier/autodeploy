@@ -584,6 +584,8 @@ function Get-ModificationSummary {
     $summary += "  License Auto-Install: $(if ($LicenseVBRTune) { 'Enabled' } else { 'Disabled' })"
     $summary += "  VCSP Connection: $(if ($VCSPConnection) { 'Enabled' } else { 'Disabled' })"
     $summary += "  Restore Config: $(if ($ISOInfo.RestoreConfig) { 'Enabled' } else { 'Disabled' })"
+    $summary += "  External Managers Installation: $(if ($ExternalManagersInstallationEnabled) { 'Enabled' } else { 'Disabled' }) (timeout ${ExternalManagersInstallationTimeout}s)"
+    $summary += "  High Availability: $(if ($HighAvailabilityEnabled) { 'Enabled' } else { 'Disabled' }) (timeout ${HighAvailabilityTimeout}s)"
     }
     $summary += "=================================================================================================="
 
