@@ -185,11 +185,10 @@ Rendered into /etc/veeam/vbr_init.cfg as `externalManagersInstallation.enabled=t
 Default: $false
 
 .PARAMETER ExternalManagersInstallationTimeout
-VSA 13.1+ Host Manager flag: timeout in seconds for the external managers installation step.
-OPTIONAL -- if omitted from the JSON (or set to $null/0), the corresponding line is NOT
-emitted in /etc/veeam/vbr_init.cfg (Veeam uses its built-in default).
-When set, rendered as `externalManagersInstallation.timeout=<seconds>`.
-Default: $null (omit)
+VSA 13.1+ Host Manager flag: timeout (in seconds) for the external managers installation window.
+After the timeout expires, Veeam Host Manager automatically disables the option.
+Always emitted to /etc/veeam/vbr_init.cfg as `externalManagersInstallation.timeout=<seconds>`.
+Default: 3600 (60 minutes)
 
 .PARAMETER HighAvailabilityEnabled
 VSA 13.1+ Host Manager flag: enable high availability mode on the appliance.
@@ -197,11 +196,10 @@ Rendered into /etc/veeam/vbr_init.cfg as `highAvailability.enabled=true|false`.
 Default: $false
 
 .PARAMETER HighAvailabilityTimeout
-VSA 13.1+ Host Manager flag: timeout in seconds for the high availability initialization step.
-OPTIONAL -- if omitted from the JSON (or set to $null/0), the corresponding line is NOT
-emitted in /etc/veeam/vbr_init.cfg (Veeam uses its built-in default).
-When set, rendered as `highAvailability.timeout=<seconds>`.
-Default: $null (omit)
+VSA 13.1+ Host Manager flag: timeout (in seconds) for the high availability initialization window.
+After the timeout expires, Veeam Host Manager automatically disables the option.
+Always emitted to /etc/veeam/vbr_init.cfg as `highAvailability.timeout=<seconds>`.
+Default: 3600 (60 minutes)
 
 .PARAMETER NodeExporter
 Boolean flag to enable node_exporter deployment. 
@@ -373,9 +371,9 @@ function Set-DefaultParameter {
         NtpServer                = @("time.nist.gov")
         NtpRunSync               = "true"
         ExternalManagersInstallationEnabled = $false
-        ExternalManagersInstallationTimeout = $null
+        ExternalManagersInstallationTimeout = 3600    # 60 min in seconds; after timeout, Veeam auto-disables the option
         HighAvailabilityEnabled             = $false
-        HighAvailabilityTimeout             = $null
+        HighAvailabilityTimeout             = 3600    # 60 min in seconds; after timeout, Veeam auto-disables the option
         NodeExporter             = $false
         LicenseVBRTune           = $false
         LicenseFile              = "Veeam-100instances-entplus-monitoring-nfr.lic"
@@ -1061,17 +1059,14 @@ function Get-DisableIPv6PostBlock {
 
 function Get-VeeamHostConfigBlock {
     # v2.8 (VSA 13.1): externalManagersInstallation + highAvailability config lines.
-    # `.enabled` is always emitted (default 'false'); `.timeout` only when explicitly set in JSON.
+    # Both .enabled and .timeout are always emitted -- timeouts default to 3600 sec (60 min).
+    # When the timeout expires, Veeam Host Manager automatically disables the corresponding option.
     $extraConfigLines = @(
-        "externalManagersInstallation.enabled=$(if ($ExternalManagersInstallationEnabled) { 'true' } else { 'false' })"
+        "externalManagersInstallation.enabled=$(if ($ExternalManagersInstallationEnabled) { 'true' } else { 'false' })",
+        "externalManagersInstallation.timeout=$ExternalManagersInstallationTimeout",
+        "highAvailability.enabled=$(if ($HighAvailabilityEnabled) { 'true' } else { 'false' })",
+        "highAvailability.timeout=$HighAvailabilityTimeout"
     )
-    if ($ExternalManagersInstallationTimeout) {
-        $extraConfigLines += "externalManagersInstallation.timeout=$ExternalManagersInstallationTimeout"
-    }
-    $extraConfigLines += "highAvailability.enabled=$(if ($HighAvailabilityEnabled) { 'true' } else { 'false' })"
-    if ($HighAvailabilityTimeout) {
-        $extraConfigLines += "highAvailability.timeout=$HighAvailabilityTimeout"
-    }
 
     return @(
         "log 'starting Veeam Host Manager configuration'",

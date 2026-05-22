@@ -18,11 +18,12 @@ This advanced PowerShell script automates the customization of Veeam Software Ap
 ---
 
 ## What's New (v2.8)
-- **Support for VSA 13.1**: 4 new JSON keys for the Host Manager init config (VSA workflow only). All optional and default-off so v2.7 JSONs keep working as-is.
+- **Support for VSA 13.1**: 4 new JSON keys for the Host Manager init config (VSA workflow only). All default-off so v2.7 JSONs keep working as-is.
   - `ExternalManagersInstallationEnabled` (bool, default `false`) -> rendered as `externalManagersInstallation.enabled=true|false` in `/etc/veeam/vbr_init.cfg`
-  - `ExternalManagersInstallationTimeout` (int seconds, optional) -> rendered as `externalManagersInstallation.timeout=<sec>` only when set
+  - `ExternalManagersInstallationTimeout` (int seconds, default `3600` = 60 min) -> rendered as `externalManagersInstallation.timeout=<sec>`
   - `HighAvailabilityEnabled` (bool, default `false`) -> rendered as `highAvailability.enabled=true|false`
-  - `HighAvailabilityTimeout` (int seconds, optional) -> rendered as `highAvailability.timeout=<sec>` only when set
+  - `HighAvailabilityTimeout` (int seconds, default `3600` = 60 min) -> rendered as `highAvailability.timeout=<sec>`
+- **Auto-disable on timeout expiry**: when `*.Timeout` elapses, Veeam Host Manager automatically disables the corresponding option (`*.enabled` switches to `false` at runtime).
 
 ## What's New (v2.7)
 - **JSON-only mode (BREAKING)**: `-ConfigFile` is now the only CLI argument; all other settings MUST come from the JSON file. CLI overrides are no longer supported.
@@ -184,7 +185,9 @@ https://www.veeam.com/kb4772
     "NtpServer": ["time.nist.gov", "0.fr.pool.ntp.org"],
     "NtpRunSync": "true",
     "ExternalManagersInstallationEnabled": false,
+    "ExternalManagersInstallationTimeout": 3600,
     "HighAvailabilityEnabled": false,
+    "HighAvailabilityTimeout": 3600,
     "NodeExporter": false,
     "LicenseVBRTune": false,
     "LicenseFile": "Veeam-100instances-entplus-monitoring-nfr.lic",
@@ -259,9 +262,9 @@ https://www.veeam.com/kb4772
 | NtpServer | String OR Array&lt;String&gt; | NTP server(s) for time synchronization (FQDN or IP). Single string for one server, array for multiple — e.g. `["ntp1.example.local","ntp2.example.local"]` | `["time.nist.gov"]` |
 | NtpRunSync | String | Enable automatic time synchronization on boot ("true"/"false") - if sync fails customization fails | `"true"` |
 | ExternalManagersInstallationEnabled | Bool | VSA 13.1+. Allow installation of external managers. Rendered as `externalManagersInstallation.enabled=true\|false` | `false` |
-| ExternalManagersInstallationTimeout | Int (optional) | VSA 13.1+. Timeout (sec) for external managers installation. Omitted from kickstart when unset | _(omit)_ |
+| ExternalManagersInstallationTimeout | Int | VSA 13.1+. Timeout (in seconds) for the external managers installation window. **After the timeout expires, the option is automatically disabled by Veeam Host Manager.** | `3600` (60 min) |
 | HighAvailabilityEnabled | Bool | VSA 13.1+. Enable HA mode on the appliance. Rendered as `highAvailability.enabled=true\|false` | `false` |
-| HighAvailabilityTimeout | Int (optional) | VSA 13.1+. Timeout (sec) for HA initialization. Omitted from kickstart when unset | _(omit)_ |
+| HighAvailabilityTimeout | Int | VSA 13.1+. Timeout (in seconds) for the HA initialization window. **After the timeout expires, the option is automatically disabled by Veeam Host Manager.** | `3600` (60 min) |
 
 ### Optional Features
 
