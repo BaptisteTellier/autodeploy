@@ -961,16 +961,12 @@ function Get-CustomVBRBlock {
 }
 
 function Get-CustomVCSPBlock3 {
-$bashScript = 
+# v2.8: the legacy `touch /etc/veeam/allow_external_managers_installation` /
+# `rm -f` mechanism is gone. VSA 13.1 manages this via vbr_init.cfg's
+# `externalManagersInstallation.enabled` + `.timeout=<sec>` (auto-disable on expiry).
+# A pre-flight check in Invoke-VSA also ensures EM=true whenever VCSPConnection=true.
+$bashScript =
 @"
-#==============================================================================
-# enable external managers installation
-#==============================================================================
-echo 'enabling external managers installation...'
-touch /etc/veeam/allow_external_managers_installation
-echo 'external managers installation enabled'
-sleep 2
-
 #==============================================================================
 # Add to Service Provider
 #==============================================================================
@@ -1015,9 +1011,8 @@ fi
 
 echo 'OK : Added to Service Provider successfully'
 sleep 2
-echo 'disable allow_external_managers_installation flag'
-rm -f /etc/veeam/allow_external_managers_installation
-echo 'flag disabled successfully'
+# Note: external managers installation is managed via vbr_init.cfg (auto-disable
+# after externalManagersInstallation.timeout expires) -- no explicit flag cleanup needed.
 "@
     return $bashScript -replace "`r`n", "`n"
 }
@@ -1309,16 +1304,24 @@ function Invoke-VSA {
         throw "Prerequisites check failed. Please resolve the issues above."
     }
 
+    # v2.8 consistency: VCSP integration requires external managers installation enabled.
+    # The legacy `/etc/veeam/allow_external_managers_installation` touch-file mechanism
+    # was removed -- now vbr_init.cfg's externalManagersInstallation.enabled must be true.
+    if ($VCSPConnection -and -not $ExternalManagersInstallationEnabled) {
+        Write-Log "VCSPConnection=true requires ExternalManagersInstallationEnabled=true; auto-enabling for this run." 'Warn'
+        $script:ExternalManagersInstallationEnabled = $true
+    }
+
     if (-not $UseDHCP) {
-        if ([string]::IsNullOrWhiteSpace($StaticIP) -or 
-            [string]::IsNullOrWhiteSpace($Subnet) -or 
+        if ([string]::IsNullOrWhiteSpace($StaticIP) -or
+            [string]::IsNullOrWhiteSpace($Subnet) -or
             [string]::IsNullOrWhiteSpace($Gateway)) {
             throw "Static IP configuration requires StaticIP, Subnet, and Gateway parameters"
         }
     }
 
     $isoInfo = Initialize-ISOOperation
-    
+
     Write-Host "`n$(Get-ModificationSummary -ISOInfo $isoInfo)" -ForegroundColor Yellow
     Write-Host "`nPress Enter to continue or Ctrl+C to abort..." -ForegroundColor Cyan
     $null = Read-Host  # discard return value -- otherwise it pollutes the function pipeline
@@ -1460,6 +1463,19 @@ function Invoke-VIA {
         throw "Prerequisites check failed. Please resolve the issues above."
     }
 
+    # VSA-only feature flags must NOT be set on non-VSA workflows -- these features rely on
+    # Veeam.Backup.PowerShell / VBR license / unattended config restore which only exist on VSA.
+    $vsaOnlyFlags = [ordered]@{
+        VCSPConnection = $VCSPConnection
+        LicenseVBRTune = $LicenseVBRTune
+        RestoreConfig  = $RestoreConfig
+    }
+    foreach ($pair in $vsaOnlyFlags.GetEnumerator()) {
+        if ($pair.Value) {
+            throw "$($pair.Key)=true is only supported for ApplianceType='VSA'. Current ApplianceType is '$ApplianceType'. Set $($pair.Key)=false in your JSON or change ApplianceType to 'VSA'."
+        }
+    }
+
     if (-not $UseDHCP) {
         if ([string]::IsNullOrWhiteSpace($StaticIP) -or 
             [string]::IsNullOrWhiteSpace($Subnet) -or 
@@ -1554,6 +1570,19 @@ function Invoke-VIAVMware {
         throw "Prerequisites check failed. Please resolve the issues above."
     }
 
+    # VSA-only feature flags must NOT be set on non-VSA workflows -- these features rely on
+    # Veeam.Backup.PowerShell / VBR license / unattended config restore which only exist on VSA.
+    $vsaOnlyFlags = [ordered]@{
+        VCSPConnection = $VCSPConnection
+        LicenseVBRTune = $LicenseVBRTune
+        RestoreConfig  = $RestoreConfig
+    }
+    foreach ($pair in $vsaOnlyFlags.GetEnumerator()) {
+        if ($pair.Value) {
+            throw "$($pair.Key)=true is only supported for ApplianceType='VSA'. Current ApplianceType is '$ApplianceType'. Set $($pair.Key)=false in your JSON or change ApplianceType to 'VSA'."
+        }
+    }
+
     if (-not $UseDHCP) {
         if ([string]::IsNullOrWhiteSpace($StaticIP) -or 
             [string]::IsNullOrWhiteSpace($Subnet) -or 
@@ -1642,6 +1671,19 @@ function Invoke-VIAHR {
 
     if (-not (Test-Prerequisites)) {
         throw "Prerequisites check failed. Please resolve the issues above."
+    }
+
+    # VSA-only feature flags must NOT be set on non-VSA workflows -- these features rely on
+    # Veeam.Backup.PowerShell / VBR license / unattended config restore which only exist on VSA.
+    $vsaOnlyFlags = [ordered]@{
+        VCSPConnection = $VCSPConnection
+        LicenseVBRTune = $LicenseVBRTune
+        RestoreConfig  = $RestoreConfig
+    }
+    foreach ($pair in $vsaOnlyFlags.GetEnumerator()) {
+        if ($pair.Value) {
+            throw "$($pair.Key)=true is only supported for ApplianceType='VSA'. Current ApplianceType is '$ApplianceType'. Set $($pair.Key)=false in your JSON or change ApplianceType to 'VSA'."
+        }
     }
 
     if (-not $UseDHCP) {
