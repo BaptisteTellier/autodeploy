@@ -11,11 +11,18 @@
 
 This advanced PowerShell script automates the customization of Veeam Software Appliance ISO files, enabling fully automated, unattended appliance deployments with enterprise-grade, reusable configurations. It supports JSON configuration loading, out-of-place ISO modification, advanced logging, and optional IS backup creation. Network, security, and monitoring details can be configured to fit enterprise environments.
 
-- Tested on build 13.0.0.4967_20250822 & 13.0.1.180_20251101 & 13.0.1.2067_20260310
+- Tested on build 13.0.0.4967_20250822 & 13.0.1.180_20251101 & 13.0.1.2067_20260310 & 13.1.x (VSA)
 - For Auto-Deployment PowerShell exemple : [Powershell Folder](https://github.com/BaptisteTellier/autodeploy/tree/main/powershell)
 - For Packer remote kickstart exemple : [Packer Folder](https://github.com/BaptisteTellier/autodeploy/tree/main/packer)
 - Youtube video - French audi with Eng Sub : [Part 1](https://www.youtube.com/watch?v=Ri877QyX6i8) [Part 2](https://www.youtube.com/watch?v=fIvcHSPhUUM) [Part 3](https://www.youtube.com/watch?v=MwQcrLufKDU) [Part 4](https://www.youtube.com/watch?v=O56TzfvDNT0) [Part 5](https://www.youtube.com/watch?v=-LA9wKzujyA)
 ---
+
+## What's New (v2.8)
+- **Support for VSA 13.1**: 4 new JSON keys for the Host Manager init config (VSA workflow only). All optional and default-off so v2.7 JSONs keep working as-is.
+  - `ExternalManagersInstallationEnabled` (bool, default `false`) -> rendered as `externalManagersInstallation.enabled=true|false` in `/etc/veeam/vbr_init.cfg`
+  - `ExternalManagersInstallationTimeout` (int seconds, optional) -> rendered as `externalManagersInstallation.timeout=<sec>` only when set
+  - `HighAvailabilityEnabled` (bool, default `false`) -> rendered as `highAvailability.enabled=true|false`
+  - `HighAvailabilityTimeout` (int seconds, optional) -> rendered as `highAvailability.timeout=<sec>` only when set
 
 ## What's New (v2.7)
 - **JSON-only mode (BREAKING)**: `-ConfigFile` is now the only CLI argument; all other settings MUST come from the JSON file. CLI overrides are no longer supported.
@@ -174,8 +181,10 @@ https://www.veeam.com/kb4772
     "VeeamSoIsMfaEnabled": "true",
     "VeeamSoRecoveryToken": "12345678-90ab-cdef-1234-567890abcdef",
     "VeeamSoIsEnabled": "true",
-    "NtpServer": ["time.nist.gov", "0.fr.pool.ntp.org],
+    "NtpServer": ["time.nist.gov", "0.fr.pool.ntp.org"],
     "NtpRunSync": "true",
+    "ExternalManagersInstallationEnabled": false,
+    "HighAvailabilityEnabled": false,
     "NodeExporter": false,
     "LicenseVBRTune": false,
     "LicenseFile": "Veeam-100instances-entplus-monitoring-nfr.lic",
@@ -249,6 +258,10 @@ https://www.veeam.com/kb4772
 | VeeamSoIsEnabled | String | Enable/disable the Security Officer account entirely ("true"/"false") | `"true"` |
 | NtpServer | String OR Array&lt;String&gt; | NTP server(s) for time synchronization (FQDN or IP). Single string for one server, array for multiple — e.g. `["ntp1.example.local","ntp2.example.local"]` | `["time.nist.gov"]` |
 | NtpRunSync | String | Enable automatic time synchronization on boot ("true"/"false") - if sync fails customization fails | `"true"` |
+| ExternalManagersInstallationEnabled | Bool | VSA 13.1+. Allow installation of external managers. Rendered as `externalManagersInstallation.enabled=true\|false` | `false` |
+| ExternalManagersInstallationTimeout | Int (optional) | VSA 13.1+. Timeout (sec) for external managers installation. Omitted from kickstart when unset | _(omit)_ |
+| HighAvailabilityEnabled | Bool | VSA 13.1+. Enable HA mode on the appliance. Rendered as `highAvailability.enabled=true\|false` | `false` |
+| HighAvailabilityTimeout | Int (optional) | VSA 13.1+. Timeout (sec) for HA initialization. Omitted from kickstart when unset | _(omit)_ |
 
 ### Optional Features
 

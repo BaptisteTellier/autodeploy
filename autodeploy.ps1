@@ -12,7 +12,7 @@ Baptiste TELLIER
 .COPYRIGHT
 Copyright (c) 2025 Baptiste TELLIER
 
-.VERSION 2.7
+.VERSION 2.8
 
 .DESCRIPTION
 This PowerShell script provides automation for customizing Veeam Appliance ISO files to enable fully automated, unattended installations.
@@ -179,6 +179,30 @@ Proper time synchronization is critical for Veeam operations, backup scheduling,
 Recommended to use your organization's internal NTP servers or reliable public pools.
 Default: @("time.nist.gov")
 
+.PARAMETER ExternalManagersInstallationEnabled
+VSA 13.1+ Host Manager flag: allow installation of external managers on the appliance.
+Rendered into /etc/veeam/vbr_init.cfg as `externalManagersInstallation.enabled=true|false`.
+Default: $false
+
+.PARAMETER ExternalManagersInstallationTimeout
+VSA 13.1+ Host Manager flag: timeout in seconds for the external managers installation step.
+OPTIONAL -- if omitted from the JSON (or set to $null/0), the corresponding line is NOT
+emitted in /etc/veeam/vbr_init.cfg (Veeam uses its built-in default).
+When set, rendered as `externalManagersInstallation.timeout=<seconds>`.
+Default: $null (omit)
+
+.PARAMETER HighAvailabilityEnabled
+VSA 13.1+ Host Manager flag: enable high availability mode on the appliance.
+Rendered into /etc/veeam/vbr_init.cfg as `highAvailability.enabled=true|false`.
+Default: $false
+
+.PARAMETER HighAvailabilityTimeout
+VSA 13.1+ Host Manager flag: timeout in seconds for the high availability initialization step.
+OPTIONAL -- if omitted from the JSON (or set to $null/0), the corresponding line is NOT
+emitted in /etc/veeam/vbr_init.cfg (Veeam uses its built-in default).
+When set, rendered as `highAvailability.timeout=<seconds>`.
+Default: $null (omit)
+
 .PARAMETER NodeExporter
 Boolean flag to enable node_exporter deployment. 
 Default: $false
@@ -218,7 +242,7 @@ Run the script (JSON-only mode -- this is the only supported invocation):
 File Name      : autodeploy.ps1
 Author         : Baptiste TELLIER
 Prerequisite   : PowerShell 7+, WSL with xorriso installed
-Version        : 2.7
+Version        : 2.8
 Creation Date  : 24/09/2025
 Last Modified  : 26/11/2025
 
@@ -310,6 +334,8 @@ $script:KnownParameters = @(
     'VeeamAdminPassword', 'VeeamAdminMfaSecretKey', 'VeeamAdminIsMfaEnabled',
     'VeeamSoPassword', 'VeeamSoMfaSecretKey', 'VeeamSoIsMfaEnabled',
     'VeeamSoRecoveryToken', 'VeeamSoIsEnabled', 'NtpServer', 'NtpRunSync',
+    'ExternalManagersInstallationEnabled', 'ExternalManagersInstallationTimeout',
+    'HighAvailabilityEnabled', 'HighAvailabilityTimeout',
     'NodeExporter', 'LicenseVBRTune', 'LicenseFile', 'SyslogServer',
     'VCSPConnection', 'VCSPUrl', 'VCSPLogin', 'VCSPPassword',
     'RestoreConfig', 'ConfigPasswordSo', 'Debug'
@@ -346,6 +372,10 @@ function Set-DefaultParameter {
         VeeamSoIsEnabled         = "true"
         NtpServer                = @("time.nist.gov")
         NtpRunSync               = "true"
+        ExternalManagersInstallationEnabled = $false
+        ExternalManagersInstallationTimeout = $null
+        HighAvailabilityEnabled             = $false
+        HighAvailabilityTimeout             = $null
         NodeExporter             = $false
         LicenseVBRTune           = $false
         LicenseFile              = "Veeam-100instances-entplus-monitoring-nfr.lic"
@@ -1030,6 +1060,19 @@ function Get-DisableIPv6PostBlock {
 }
 
 function Get-VeeamHostConfigBlock {
+    # v2.8 (VSA 13.1): externalManagersInstallation + highAvailability config lines.
+    # `.enabled` is always emitted (default 'false'); `.timeout` only when explicitly set in JSON.
+    $extraConfigLines = @(
+        "externalManagersInstallation.enabled=$(if ($ExternalManagersInstallationEnabled) { 'true' } else { 'false' })"
+    )
+    if ($ExternalManagersInstallationTimeout) {
+        $extraConfigLines += "externalManagersInstallation.timeout=$ExternalManagersInstallationTimeout"
+    }
+    $extraConfigLines += "highAvailability.enabled=$(if ($HighAvailabilityEnabled) { 'true' } else { 'false' })"
+    if ($HighAvailabilityTimeout) {
+        $extraConfigLines += "highAvailability.timeout=$HighAvailabilityTimeout"
+    }
+
     return @(
         "log 'starting Veeam Host Manager configuration'",
         "###############################################################################",
@@ -1045,7 +1088,8 @@ function Get-VeeamHostConfigBlock {
         "veeamso.recoveryToken=$VeeamSoRecoveryToken",
         "veeamso.isEnabled=$VeeamSoIsEnabled",
         "ntp.servers=$($NtpServer -join ';')",
-        "ntp.runSync=$NtpRunSync",
+        "ntp.runSync=$NtpRunSync"
+    ) + $extraConfigLines + @(
         "vbr_control.runInitIso=true",
         "vbr_control.runStart=true",
         "EOF",
@@ -1683,7 +1727,7 @@ try {
     Start-Transcript -Path $logFile -Append
 
     Write-Log "=================================================================================================="
-    Write-Log "Veeam ISO Customization Script - Version 2.7"
+    Write-Log "Veeam ISO Customization Script - Version 2.8"
     Write-Log "=================================================================================================="
 
     # JSON-ONLY MODE: defaults first, JSON wins for any key it defines.

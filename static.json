@@ -25,6 +25,8 @@
   "VeeamSoIsEnabled": "true",
   "NtpServer": ["time.nist.gov", "0.fr.pool.ntp.org", "1.fr.pool.ntp.org"],
   "NtpRunSync": "true",
+  "ExternalManagersInstallationEnabled": false,
+  "HighAvailabilityEnabled": false,
   "NodeExporter": false,
   "LicenseVBRTune": true,
   "LicenseFile": "Veeam-100instances-entplus-monitoring-nfr.lic",
