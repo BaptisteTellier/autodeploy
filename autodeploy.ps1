@@ -979,19 +979,37 @@ SUCCESS=0
 while [ `$ATTEMPT -le 3 ]; do
     echo "[Attempt `$ATTEMPT/3] Running Powershell to add cloud provider"
     if pwsh -Command '
-        Import-Module /opt/veeam/powershell/Veeam.Backup.PowerShell/Veeam.Backup.PowerShell.psd1
-        `$credentials = Get-VBRCloudProviderCredentials -Name "$VCSPLogin"
-        if (-not `$credentials) {
-            write-Host "Credentials not found, adding new credentials"
-            Add-VBRCloudProviderCredentials -Name "$VCSPLogin" -Password "$VCSPPassword"
-            `$credentials = Get-VBRCloudProviderCredentials -Name "$VCSPLogin"
+        # Fix 1: cmdlet errors must be terminating, otherwise the final Write-Host masks them
+        # and pwsh exits 0 even when Add-VBRCloudProvider failed.
+        `$ErrorActionPreference = "Stop"
+        try {
+            Import-Module /opt/veeam/powershell/Veeam.Backup.PowerShell/Veeam.Backup.PowerShell.psd1
+
+            `$credentials = Get-VBRCloudProviderCredentials -Name "$VCSPLogin" -ErrorAction SilentlyContinue
+            if (-not `$credentials) {
+                Write-Host "Credentials not found, creating new credentials"
+                Add-VBRCloudProviderCredentials -Name "$VCSPLogin" -Password "$VCSPPassword"
+                `$credentials = Get-VBRCloudProviderCredentials -Name "$VCSPLogin"
+            } else {
+                Write-Host "Credentials found"
+            }
+
+            Write-Host "Adding cloud provider..."
+            Add-VBRCloudProvider -Address "$VCSPUrl" -Credentials `$credentials -InstallManagementAgent -Force | Out-Null
+
+            # Fix 3: verify the provider was actually saved. Without this, a silent failure
+            # (cmdlet error printed but not thrown) would still report success.
+            `$verify = Get-VBRCloudProvider -Address "$VCSPUrl" -ErrorAction SilentlyContinue
+            if (-not `$verify) {
+                throw "Add-VBRCloudProvider returned without error but Get-VBRCloudProvider cannot find the provider afterwards."
+            }
+            Write-Host "OK: cloud provider verified (Id=`$(`$verify.Id))"
         }
-        else {
-            write-Host "Credentials found"
+        catch {
+            # Fix 2: print the actual error message and exit non-zero so bash retry triggers.
+            Write-Host "[ERROR] `$(`$_.Exception.Message)"
+            exit 1
         }
-        write-Host "adding cloud provider..."
-        Add-VBRCloudProvider -Address "$VCSPUrl" -Credentials `$credentials -InstallManagementAgent -Force
-        write-Host "Cloud provider added successfully"
         '; then
         echo "[SUCCESS] Powershell add provider worked on attempt number `$ATTEMPT"
         SUCCESS=1
