@@ -23,7 +23,6 @@ This advanced PowerShell script automates the customization of Veeam Software Ap
   - `ExternalManagersInstallationTimeout` (int seconds, default `3600` = 60 min) -> rendered as `externalManagersInstallation.timeout=<sec>`
   - `HighAvailabilityEnabled` (bool, default `false`) -> rendered as `highAvailability.enabled=true|false`
   - `HighAvailabilityTimeout` (int seconds, default `3600` = 60 min) -> rendered as `highAvailability.timeout=<sec>`
-- **Auto-disable on timeout expiry**: when `*.Timeout` elapses, Veeam Host Manager automatically disables the corresponding option (`*.enabled` switches to `false` at runtime).
 - **NodeExporter refactor (BREAKING, VSA 13.1+ required)**: `node_exporter` is now built-in to VSA 13.1 via Veeam Backup & Replication. The script no longer copies an `offline_repo/`, no longer installs the RPM, no longer creates a systemd unit, and no longer opens firewall port 9100. Activation is now a one-liner: `Set-VBRNodeExporterOptions -EnableMetricsSharing` (via the existing `NodeExporter` JSON key, default `false`). Verification endpoint changes from `http://<VSA>:9100/metrics` to `http://<VSA>/metrics` (port 80, or 443 with TLS).
 - **New JSON key `NodeExporterTLSEnabled`** (bool, default `false`). When `true`, runs `Set-VBRNodeExporterOptions -EnableMetricsSharing -EnableTLS` so the metrics endpoint switches from HTTP to HTTPS (`https://<VSA>/metrics`). Only effective when `NodeExporter=true`.
 - **NodeExporter is now VSA-only (BREAKING)**: `Set-VBRNodeExporterOptions` is a VBR cmdlet that does not exist on VIA/VIAVMware/VIAHR appliances. Setting `NodeExporter=true` on those workflows now throws early (same pattern as `VCSPConnection`/`LicenseVBRTune`/`RestoreConfig`). VIA appliance node_exporter configuration will be piloted by the VSA in a future release.
@@ -37,46 +36,9 @@ This advanced PowerShell script automates the customization of Veeam Software Ap
 - Unknown JSON keys are logged as warnings (typo detection).
 - `NtpServer` JSON key now accepts an array of servers (e.g. `["ntp1.example.local", "ntp2.example.local"]`) rendered as `ntp.servers=ntp1;ntp2` in the kickstart. Single-string form remains supported (backward-compatible).
 
-## What's New (v2.6)
-- Now requires PowerShell 7+ 
-- Add Service Provider doesn't require any external tool anymore
-- Node_Exporter install use offline_repo
-- debug works for all VIA
-- 2.6.1 : fixed issue - hardened repo not pairing automatically after deployment 
-- 2.6.2 : fixed issue - official updater repo re-enablement after being disabled by offline repo (node exporter & restore conf)
+## What's New older are moved to archive folder
 
-## What's New (v2.5)
 
-- Now works with RTM_13.0.1.180_20251101
-- Confirmed with RTM : Add service provider works with SO (no logic added w/o SO yet)
-- Enhanced logics with retry & Restart TTY end of script for reliability
-
-## What's New (v2.4)
-
-- Optionnal feature : Debug ! (enable root and ssh)
-- Automatique unattended configuration restore now works offline
-
-## What's New (v2.3)
-
-- Optionnal feature : Automatique unattended configuration restore !
-- Improved log inside VSA
-
-## What's New (v2.2)
-
-- Now support Veeam Infrastructure Appliance (JeOS) - Proxy / VMware Proxy / Hardened Repository
-
-## What's New (v2.1)
-
-- Fix network configuration not applied correctly
-- CFGOnly parameter to create cfg file without iso creation or modification - useful for Packer or Cloud init
-- NodeExporterDNF parameter to install Node Exporter with DNF (require online)
-
-## What's New (v2.0)
-
-- JSON configuration support for all parameters
-- Out-of-place ISO customization by default
-- Optional backup creation for in-place editing
-- Improved script logging and in VSA logging
 
 ---
 
@@ -89,7 +51,7 @@ This advanced PowerShell script automates the customization of Veeam Software Ap
 - DHCP and static IP support, validated in script
 - Regional keyboard & timezone settings
 - Secure password and MFA configuration for Veeam accounts
-- (optional) Prometheus node_exporter deployment
+- (optional) node_exporter enablement
 - (optional) Service Provider (VCSP) integration for v13.0.1+
 - (optional) VBR licensing import and VBR tunning exemple such as Syslog server addition
 - (optional) Support for Automatique unattended configuration restore
@@ -268,10 +230,10 @@ https://www.veeam.com/kb4772
 | VeeamSoIsEnabled | String | Enable/disable the Security Officer account entirely ("true"/"false") | `"true"` |
 | NtpServer | String OR Array&lt;String&gt; | NTP server(s) for time synchronization (FQDN or IP). Single string for one server, array for multiple — e.g. `["ntp1.example.local","ntp2.example.local"]` | `["time.nist.gov"]` |
 | NtpRunSync | String | Enable automatic time synchronization on boot ("true"/"false") - if sync fails customization fails | `"true"` |
-| ExternalManagersInstallationEnabled | Bool | VSA 13.1+. Allow installation of external managers. Rendered as `externalManagersInstallation.enabled=true\|false` | `false` |
-| ExternalManagersInstallationTimeout | Int | VSA 13.1+. Timeout (in seconds) for the external managers installation window. **After the timeout expires, the option is automatically disabled by Veeam Host Manager.** | `3600` (60 min) |
-| HighAvailabilityEnabled | Bool | VSA 13.1+. Enable HA mode on the appliance. Rendered as `highAvailability.enabled=true\|false` | `false` |
-| HighAvailabilityTimeout | Int | VSA 13.1+. Timeout (in seconds) for the HA initialization window. **After the timeout expires, the option is automatically disabled by Veeam Host Manager.** | `3600` (60 min) |
+| ExternalManagersInstallationEnabled | Bool | VSA 13.1+. Allow installation of external managers. | `false` |
+| ExternalManagersInstallationTimeout | Int | VSA 13.1+. Timeout (in seconds) for the external managers installation window.  | `3600` (60 min) |
+| HighAvailabilityEnabled | Bool | VSA 13.1+. Enable HA mode on the appliance. | `false` |
+| HighAvailabilityTimeout | Int | VSA 13.1+. Timeout (in seconds) for the HA initialization window. | `3600` (60 min) |
 
 ### Optional Features
 
