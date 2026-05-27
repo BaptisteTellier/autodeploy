@@ -24,6 +24,11 @@ This advanced PowerShell script automates the customization of Veeam Software Ap
   - `HighAvailabilityEnabled` (bool, default `false`) -> rendered as `highAvailability.enabled=true|false`
   - `HighAvailabilityTimeout` (int seconds, default `3600` = 60 min) -> rendered as `highAvailability.timeout=<sec>`
 - **Auto-disable on timeout expiry**: when `*.Timeout` elapses, Veeam Host Manager automatically disables the corresponding option (`*.enabled` switches to `false` at runtime).
+- **NodeExporter refactor (BREAKING, VSA 13.1+ required)**: `node_exporter` is now built-in to VSA 13.1 via Veeam Backup & Replication. The script no longer copies an `offline_repo/`, no longer installs the RPM, no longer creates a systemd unit, and no longer opens firewall port 9100. Activation is now a one-liner: `Set-VBRNodeExporterOptions -EnableMetricsSharing` (via the existing `NodeExporter` JSON key, default `false`). Verification endpoint changes from `http://<VSA>:9100/metrics` to `http://<VSA>/metrics` (port 80, or 443 with TLS).
+- **New JSON key `NodeExporterTLSEnabled`** (bool, default `false`). When `true`, runs `Set-VBRNodeExporterOptions -EnableMetricsSharing -EnableTLS` so the metrics endpoint switches from HTTP to HTTPS (`https://<VSA>/metrics`). Only effective when `NodeExporter=true`.
+- **NodeExporter is now VSA-only (BREAKING)**: `Set-VBRNodeExporterOptions` is a VBR cmdlet that does not exist on VIA/VIAVMware/VIAHR appliances. Setting `NodeExporter=true` on those workflows now throws early (same pattern as `VCSPConnection`/`LicenseVBRTune`/`RestoreConfig`). VIA appliance node_exporter configuration will be piloted by the VSA in a future release.
+- **applianceRole.role auto-injection for VIA appliances**: VSA 13.1 replaces the GRUB-based role selection with a declarative line in `/etc/veeam/vbr_init.cfg`. The script now auto-emits this line based on `ApplianceType`: `VIA` and `VIAVMware` -> `applianceRole.role=vbproxy`, `VIAHR` -> `applianceRole.role=veeam-lhr`. VSA omits the line (it has a dedicated ISO).
+- **Publish to main pending VSA 13.1 release**: v2.8 will land on `main` once VSA 13.1 is officially released. Until then, all v2.8 work stays on the `dev` branch.
 
 ## What's New (v2.7)
 - **JSON-only mode (BREAKING)**: `-ConfigFile` is now the only CLI argument; all other settings MUST come from the JSON file. CLI overrides are no longer supported.
@@ -134,8 +139,8 @@ https://www.veeam.com/kb4772
 - `LicenseVBRTune` set to `$true`
 
 **node_exporter**
-- copy offline_repo in the same folder you execut the script
-- Might not work on VIA - Hardened Repository (not tested)
+- No extra files required -- node_exporter ships with VSA 13.1+ and is enabled via VBR cmdlet.
+- VSA-only feature; setting `NodeExporter=true` on VIA/VIAVMware/VIAHR throws.
 
 **Veeam Service Provider support**
 - fill json parameters starting with VCSP
@@ -189,6 +194,7 @@ https://www.veeam.com/kb4772
     "HighAvailabilityEnabled": false,
     "HighAvailabilityTimeout": 3600,
     "NodeExporter": false,
+    "NodeExporterTLSEnabled": false,
     "LicenseVBRTune": false,
     "LicenseFile": "Veeam-100instances-entplus-monitoring-nfr.lic",
     "SyslogServer": "",
@@ -270,7 +276,8 @@ https://www.veeam.com/kb4772
 
 | Parameter           | Type    | Description                      | Default                                   |
 |---------------------|---------|----------------------------------|-------------------------------------------|
-| NodeExporter        | Bool    | Deploy Prometheus node_exporter - offline_repo folder required | false                |
+| NodeExporter        | Bool    | VSA-only (13.1+). Enables `node_exporter` metrics sharing via the built-in VBR cmdlet `Set-VBRNodeExporterOptions -EnableMetricsSharing`. Endpoint: `http://<VSA>/metrics` (port 80). Throws if set on VIA/VIAVMware/VIAHR. | false                |
+| NodeExporterTLSEnabled | Bool | Enable TLS on the node_exporter metrics endpoint. When `true`, runs `Set-VBRNodeExporterOptions -EnableMetricsSharing -EnableTLS` and the endpoint becomes `https://<VSA>/metrics`. Only effective when `NodeExporter=true`. VSA-only. | false |
 | LicenseVBRTune      | Bool    | Auto-install Veeam license (only VSA) | false                                |
 | LicenseFile         | String  | License filename                 | Veeam-100instances-entplus-monitoring-nfr.lic |
 | SyslogServer        | String  | Syslog server IP                 | ""                                        |
@@ -315,9 +322,13 @@ https://www.veeam.com/kb4772
 
 ## How Optional Feature works :
 
-### Node_Exporter
-The script install node_exporter from offline repo
-- Prometheus monitoring with firewall configuration 9100
+### Node_Exporter (VSA-only, 13.1+)
+- VSA 13.1+ has `node_exporter` built-in via Veeam Backup & Replication.
+- Enable via JSON: `"NodeExporter": true` (default `false`).
+- Optional TLS: `"NodeExporterTLSEnabled": true` switches the metrics endpoint from HTTP to HTTPS.
+- Verification after deployment: visit `http://<VSA-IP>/metrics` (or `https://<VSA-IP>/metrics` with TLS).
+- Setting `NodeExporter=true` on VIA / VIAVMware / VIAHR throws early -- these appliances will be piloted by the VSA in a future release.
+- No extra files required in the script directory (the previous `offline_repo/` RPM install method is gone).
 
 ### VBR Tunning
 - **License Installation**: Automated license deployment and activation

@@ -30,6 +30,7 @@
   "HighAvailabilityEnabled": false,
   "HighAvailabilityTimeout": 3600,
   "NodeExporter": false,
+  "NodeExporterTLSEnabled": false,
   "LicenseVBRTune": false,
   "LicenseFile": "Veeam-100instances-entplus-monitoring-nfr.lic",
   "SyslogServer": "",

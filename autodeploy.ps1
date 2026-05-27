@@ -202,7 +202,14 @@ Always emitted to /etc/veeam/vbr_init.cfg as `highAvailability.timeout=<seconds>
 Default: 3600 (60 minutes)
 
 .PARAMETER NodeExporter
-Boolean flag to enable node_exporter deployment. 
+Boolean flag to enable node_exporter deployment.
+Default: $false
+
+.PARAMETER NodeExporterTLSEnabled
+Enable TLS on the node_exporter metrics endpoint (HTTPS instead of HTTP).
+When $true, runs `Set-VBRNodeExporterOptions -EnableMetricsSharing -EnableTLS`
+so the /metrics endpoint switches from http://<VSA>/metrics to https://<VSA>/metrics.
+Only effective when NodeExporter=$true. VSA-only.
 Default: $false
 
 .PARAMETER LicenseVBRTune
@@ -334,7 +341,7 @@ $script:KnownParameters = @(
     'VeeamSoRecoveryToken', 'VeeamSoIsEnabled', 'NtpServer', 'NtpRunSync',
     'ExternalManagersInstallationEnabled', 'ExternalManagersInstallationTimeout',
     'HighAvailabilityEnabled', 'HighAvailabilityTimeout',
-    'NodeExporter', 'LicenseVBRTune', 'LicenseFile', 'SyslogServer',
+    'NodeExporter', 'NodeExporterTLSEnabled', 'LicenseVBRTune', 'LicenseFile', 'SyslogServer',
     'VCSPConnection', 'VCSPUrl', 'VCSPLogin', 'VCSPPassword',
     'RestoreConfig', 'ConfigPasswordSo', 'Debug'
 )
@@ -375,6 +382,7 @@ function Set-DefaultParameter {
         HighAvailabilityEnabled             = $false
         HighAvailabilityTimeout             = 3600    # 60 min in seconds; after timeout, Veeam auto-disables the option
         NodeExporter             = $false
+        NodeExporterTLSEnabled   = $false
         LicenseVBRTune           = $false
         LicenseFile              = "Veeam-100instances-entplus-monitoring-nfr.lic"
         SyslogServer             = ""
@@ -1051,12 +1059,21 @@ function Get-CopyLicenseBlock {
     )
 }
 
-function Get-NodeExporterFirewallBlock {
+function Get-NodeExporterEnableBlock {
+    # VSA 13.1+: node_exporter is built-in via VBR. Enable via PowerShell cmdlet.
+    # Verification: http://<VSA>/metrics (or https://<VSA>/metrics with -EnableTLS).
+    $cmdLine = if ($NodeExporterTLSEnabled) {
+        "Set-VBRNodeExporterOptions -EnableMetricsSharing -EnableTLS"
+    } else {
+        "Set-VBRNodeExporterOptions -EnableMetricsSharing"
+    }
     return @(
-        "echo 'Configure firewall for node_exporter'",
-        "firewall-cmd --permanent --zone=drop --add-port=9100/tcp",
-        "firewall-cmd --reload"
-        "echo 'Firewall configured for node_exporter 9100/tcp'"
+        "echo 'Enabling node_exporter metrics sharing'",
+        "pwsh -Command '",
+        "Import-Module /opt/veeam/powershell/Veeam.Backup.PowerShell/Veeam.Backup.PowerShell.psd1",
+        "$cmdLine",
+        "'",
+        "echo 'node_exporter metrics sharing enabled (verify: http(s)://<VSA>/metrics)'"
     )
 }
 
@@ -1083,6 +1100,15 @@ function Get-VeeamHostConfigBlock {
         "highAvailability.timeout=$HighAvailabilityTimeout"
     )
 
+    # v2.8: VSA 13.1 replaces the GRUB-based VIA role selection with a declarative
+    # applianceRole.role config in vbr_init.cfg. VSA has its own ISO and omits the line.
+    $roleLine = switch ($ApplianceType) {
+        "VIA"       { @("applianceRole.role=vbproxy") }
+        "VIAVMware" { @("applianceRole.role=vbproxy") }
+        "VIAHR"     { @("applianceRole.role=veeam-lhr") }
+        default     { @() }
+    }
+
     return @(
         "log 'starting Veeam Host Manager configuration'",
         "###############################################################################",
@@ -1099,7 +1125,7 @@ function Get-VeeamHostConfigBlock {
         "veeamso.isEnabled=$VeeamSoIsEnabled",
         "ntp.servers=$($NtpServer -join ';')",
         "ntp.runSync=$NtpRunSync"
-    ) + $extraConfigLines + @(
+    ) + $extraConfigLines + $roleLine + @(
         "vbr_control.runInitIso=true",
         "vbr_control.runStart=true",
         "EOF",
@@ -1161,30 +1187,6 @@ function Get-OfflineRepoEnableLine {
         "gpgcheck=0",
         "baseurl=file:///tmp/offline_repo",
         "EOF"
-    )
-}
-
-function Get-NodeExporterOfflineBlock {
-    return @(
-        "# Install node_exporter from offline repo",
-        "log '[1/4] Enabling offline repository...'"
-    ) + (Get-OfflineRepoEnableLine) + @(
-        "log '[2/4] Installing node_exporter from offline repo...'",
-        "dnf clean all --releasever 9",
-        "dnf --disablerepo='*' --enablerepo='local-offline' install -y node_exporter --releasever 9",
-        "log 'node_exporter installation completed'",
-        "log 'removing offline repository /etc/yum.repos.d/local-offline.repo'",
-        "rm -f /etc/yum.repos.d/local-offline.repo",
-        "dnf clean all",
-        "dnf config-manager --set-enabled '*'",
-
-        "log '[3/4] Configuring /etc/sysconfig/node_exporter ...'",
-        'bash -c ''echo OPTIONS="--web.listen-address=0.0.0.0:9100" > /etc/sysconfig/node_exporter''',
-
-        "log '[4/4] Enabling and starting node_exporter...'",
-        "systemctl daemon-reload",
-        "systemctl enable node_exporter.service",
-        "log 'node_exporter installation completed'"
     )
 }
 
@@ -1435,17 +1437,9 @@ function Invoke-VSA {
     #####
 
     if ($NodeExporter) {
-        Write-Log "Adding node_exporter configuration..." 'Info'
-        Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine "/usr/bin/cp -rv /tmp/*.* /mnt/sysimage/var/log/appliance-installation-logs/" -NewLines (Get-OfflineRepoFileCopyBlock)
-
-        Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine "/opt/veeam/hostmanager/veeamhostmanager --apply_init_config /etc/veeam/vbr_init.cfg" -NewLines (Get-NodeExporterFirewallBlock)
-
-        Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine "dnf install -y --nogpgcheck --disablerepo="*" /tmp/static-packages/*.rpm" -NewLines (Get-NodeExporterOfflineBlock)
-
-        if (-not $CFGOnly) {
-            Add-FolderToISO -TargetISO $isoInfo.TargetISO -LocalPath "offline_repo" -ISOPath "/offline_repo"
-        }
-    } 
+        Write-Log "Enabling node_exporter metrics sharing (TLS=$NodeExporterTLSEnabled)..." 'Info'
+        Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine "/opt/veeam/hostmanager/veeamhostmanager --apply_init_config /etc/veeam/vbr_init.cfg" -NewLines (Get-NodeExporterEnableBlock)
+    }
 
     #####
     ##Normalize line endings & commit changes to ISO
@@ -1489,6 +1483,7 @@ function Invoke-VIA {
         VCSPConnection = $VCSPConnection
         LicenseVBRTune = $LicenseVBRTune
         RestoreConfig  = $RestoreConfig
+        NodeExporter   = $NodeExporter
     }
     foreach ($pair in $vsaOnlyFlags.GetEnumerator()) {
         if ($pair.Value) {
@@ -1517,7 +1512,7 @@ function Invoke-VIA {
     Write-Log "Configuring GRUB bootloader..." 'Info'
     $pattern = "^(.*LABEL=VeeamJeOS:/$CFGname quiet.*)$"
     Update-FileContent -FilePath "grub.cfg" -Pattern $pattern -Replacement '${1} inst.assumeyes'
-    $newDefault = '"Veeam Infrastructure Appliance>Install - fresh install, wipes everything (including local backups)"'
+    $newDefault = '"[TBD]Veeam Infrastructure Standart Appliance>Install - fresh install, wipes everything (including local backups)"'
     Set-GrubDefaultAndTimeout -DefaultLabel $newDefault -Timeout $GrubTimeout
 
     Write-Log "Configuring Kickstart file..." 'Info'
@@ -1543,20 +1538,6 @@ function Invoke-VIA {
     if ($Debug) {
         Set-DebugSSHModifications -FilePath "$CFGname"
     }
-
-    #####
-    #Node Exporter Configuration
-    #####
-
-    if ($NodeExporter) {
-        Write-Log "Adding node_exporter configuration..." 'Info'
-        Add-ContentAfterLine -FilePath $CFGname -TargetLine "/usr/bin/cp -rv /tmp/*.* /mnt/sysimage/var/log/appliance-installation-logs/" -NewLines (Get-OfflineRepoFileCopyBlock)
-        Add-ContentAfterLine -FilePath $CFGname -TargetLine "/usr/bin/cp -rv /tmp/*.* /mnt/sysimage/var/log/appliance-installation-logs/" -NewLines (Get-NodeExporterOfflineBlock)
-        Add-ContentAfterLine -FilePath $CFGname -TargetLine "/opt/veeam/hostmanager/veeamhostmanager --apply_init_config /etc/veeam/vbr_init.cfg" -NewLines (Get-NodeExporterFirewallBlock)
-        if (-not $CFGOnly) {
-            Add-FolderToISO -TargetISO $isoInfo.TargetISO -LocalPath "offline_repo" -ISOPath "/offline_repo"
-        }
-    } 
 
     ConvertTo-LFLineEnding -Files @($CFGname, "grub.cfg")
 
@@ -1596,6 +1577,7 @@ function Invoke-VIAVMware {
         VCSPConnection = $VCSPConnection
         LicenseVBRTune = $LicenseVBRTune
         RestoreConfig  = $RestoreConfig
+        NodeExporter   = $NodeExporter
     }
     foreach ($pair in $vsaOnlyFlags.GetEnumerator()) {
         if ($pair.Value) {
@@ -1651,16 +1633,6 @@ function Invoke-VIAVMware {
         Set-DebugSSHModifications -FilePath "$CFGname"
     }
 
-    if ($NodeExporter) {
-        Write-Log "Adding node_exporter configuration..." 'Info'
-        Add-ContentAfterLine -FilePath $CFGname -TargetLine "/usr/bin/cp -rv /tmp/*.* /mnt/sysimage/var/log/appliance-installation-logs/" -NewLines (Get-OfflineRepoFileCopyBlock)
-        Add-ContentAfterLine -FilePath $CFGname -TargetLine "/usr/bin/cp -rv /tmp/*.* /mnt/sysimage/var/log/appliance-installation-logs/" -NewLines (Get-NodeExporterOfflineBlock)
-        Add-ContentAfterLine -FilePath $CFGname -TargetLine "/opt/veeam/hostmanager/veeamhostmanager --apply_init_config /etc/veeam/vbr_init.cfg" -NewLines (Get-NodeExporterFirewallBlock)
-        if (-not $CFGOnly) {
-            Add-FolderToISO -TargetISO $isoInfo.TargetISO -LocalPath "offline_repo" -ISOPath "/offline_repo"
-        }
-    }
-
     ConvertTo-LFLineEnding -Files @($CFGname, "grub.cfg")
 
     if(-not $CFGOnly){
@@ -1699,6 +1671,7 @@ function Invoke-VIAHR {
         VCSPConnection = $VCSPConnection
         LicenseVBRTune = $LicenseVBRTune
         RestoreConfig  = $RestoreConfig
+        NodeExporter   = $NodeExporter
     }
     foreach ($pair in $vsaOnlyFlags.GetEnumerator()) {
         if ($pair.Value) {
@@ -1755,16 +1728,6 @@ function Invoke-VIAHR {
     if ($Debug) {
         Set-DebugSSHModifications -FilePath "$CFGname"
     }
-
-        if ($NodeExporter) {
-        Write-Log "Adding node_exporter configuration..." 'Info'
-        Add-ContentAfterLine -FilePath $CFGname -TargetLine "/usr/bin/cp -rv /tmp/*.* /mnt/sysimage/var/log/appliance-installation-logs/" -NewLines (Get-OfflineRepoFileCopyBlock)
-        Add-ContentAfterLine -FilePath $CFGname -TargetLine "/usr/bin/cp -rv /tmp/*.* /mnt/sysimage/var/log/appliance-installation-logs/" -NewLines (Get-NodeExporterOfflineBlock)
-        Add-ContentAfterLine -FilePath $CFGname -TargetLine "/opt/veeam/hostmanager/veeamhostmanager --apply_init_config /etc/veeam/vbr_init.cfg" -NewLines (Get-NodeExporterFirewallBlock)
-        if (-not $CFGOnly) {
-            Add-FolderToISO -TargetISO $isoInfo.TargetISO -LocalPath "offline_repo" -ISOPath "/offline_repo"
-        }
-    } 
 
     ConvertTo-LFLineEnding -Files @($CFGname, "grub.cfg")
 
