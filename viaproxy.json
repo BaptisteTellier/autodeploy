@@ -26,5 +26,6 @@
   "NtpServer": ["time.nist.gov", "0.fr.pool.ntp.org", "1.fr.pool.ntp.org"],
   "NtpRunSync": "true",
   "NodeExporter": false,
-  "Debug": false
+  "Debug": false,
+  "VIASingleDisk": false
 }

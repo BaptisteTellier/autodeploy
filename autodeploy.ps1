@@ -239,6 +239,15 @@ Enable debug mode for SSH access during installation. When enabled:
 WARNING: Only use in test/development environments. Do not use in production.
 Default: $false
 
+.PARAMETER VIASingleDisk
+VIA-only flag (applies to ApplianceType=VIA, VIAVMware, VIAHR -- throws on VSA).
+When $true, sets the GRUB default menu entry to "Veeam Single Disk Appliance" instead
+of the per-workflow default ("Veeam Infrastructure Appliance" / "(with iSCSI & NVMe/TCP)" /
+"Veeam Hardened Repository"). The Single Disk entry installs by wiping the entire
+available device (passes `inst.vsingledisk` to the installer).
+Requires the source VIA ISO to ship the "Veeam Single Disk Appliance" GRUB menu entry.
+Default: $false
+
 .EXAMPLE
 Run the script (JSON-only mode -- this is the only supported invocation):
 .\autodeploy.ps1 -ConfigFile "production-config.json"
@@ -343,7 +352,7 @@ $script:KnownParameters = @(
     'HighAvailabilityEnabled', 'HighAvailabilityTimeout',
     'NodeExporter', 'NodeExporterTLSEnabled', 'LicenseVBRTune', 'LicenseFile', 'SyslogServer',
     'VCSPConnection', 'VCSPUrl', 'VCSPLogin', 'VCSPPassword',
-    'RestoreConfig', 'ConfigPasswordSo', 'Debug'
+    'RestoreConfig', 'ConfigPasswordSo', 'Debug', 'VIASingleDisk'
 )
 
 function Set-DefaultParameter {
@@ -393,6 +402,7 @@ function Set-DefaultParameter {
         RestoreConfig            = $false
         ConfigPasswordSo         = ""
         Debug                    = $false
+        VIASingleDisk            = $false
     }
     foreach ($name in $defaults.Keys) {
         Set-Variable -Name $name -Value $defaults[$name] -Scope Script
@@ -594,6 +604,9 @@ function Get-ModificationSummary {
     $summary += "  Restore Config: $(if ($ISOInfo.RestoreConfig) { 'Enabled' } else { 'Disabled' })"
     $summary += "  External Managers Installation: $(if ($ExternalManagersInstallationEnabled) { 'Enabled' } else { 'Disabled' }) (timeout ${ExternalManagersInstallationTimeout}s)"
     $summary += "  High Availability: $(if ($HighAvailabilityEnabled) { 'Enabled' } else { 'Disabled' }) (timeout ${HighAvailabilityTimeout}s)"
+    }
+    if($ApplianceType -in 'VIA','VIAVMware','VIAHR'){
+    $summary += "  Single Disk Appliance: $(if ($VIASingleDisk) { 'Enabled' } else { 'Disabled' })"
     }
     $summary += "=================================================================================================="
 
@@ -1326,6 +1339,11 @@ function Invoke-VSA {
         throw "Prerequisites check failed. Please resolve the issues above."
     }
 
+    # VIA-only flag: VIASingleDisk has no effect on VSA (VSA has its own ISO with no Single Disk entry).
+    if ($VIASingleDisk) {
+        throw "VIASingleDisk=true is only supported for ApplianceType='VIA', 'VIAVMware', or 'VIAHR'. Current ApplianceType is 'VSA'. Set VIASingleDisk=false in your JSON or change ApplianceType to a VIA workflow."
+    }
+
     # v2.8 consistency: VCSP integration requires external managers installation enabled.
     # The legacy `/etc/veeam/allow_external_managers_installation` touch-file mechanism
     # was removed -- now vbr_init.cfg's externalManagersInstallation.enabled must be true.
@@ -1510,9 +1528,16 @@ function Invoke-VIA {
     Invoke-ISOExtractConfig -TargetISO $isoInfo.TargetISO -KickstartName $CFGname
 
     Write-Log "Configuring GRUB bootloader..." 'Info'
-    $pattern = "^(.*LABEL=VeeamJeOS:/$CFGname quiet.*)$"
+    # Broadened regex (v2.8): drops the `quiet` requirement so both the Standard kernel line
+    # (`...VeeamJeOS:/<CFGname> quiet inst.assumeyes`) AND the Single Disk variant
+    # (`...VeeamJeOS:/<CFGname> inst.vsingledisk quiet`) get inst.assumeyes appended.
+    $pattern = "^(.*LABEL=VeeamJeOS:/$CFGname.*)$"
     Update-FileContent -FilePath "grub.cfg" -Pattern $pattern -Replacement '${1} inst.assumeyes'
-    $newDefault = '"[TBD]Veeam Infrastructure Standart Appliance>Install - fresh install, wipes everything (including local backups)"'
+    $newDefault = if ($VIASingleDisk) {
+        '"[TBD]Veeam Single Disk Appliance>[TBD]Install - fresh install, wipes everything on available device"'
+    } else {
+        '"[TBD]Veeam Infrastructure Standart Appliance>Install - fresh install, wipes everything (including local backups)"'
+    }
     Set-GrubDefaultAndTimeout -DefaultLabel $newDefault -Timeout $GrubTimeout
 
     Write-Log "Configuring Kickstart file..." 'Info'
@@ -1604,9 +1629,16 @@ function Invoke-VIAVMware {
     Invoke-ISOExtractConfig -TargetISO $isoInfo.TargetISO -KickstartName $CFGname
 
     Write-Log "Configuring GRUB bootloader..." 'Info'
-    $pattern = "^(.*LABEL=VeeamJeOS:/$CFGname quiet.*)$"
+    # Broadened regex (v2.8): drops the `quiet` requirement so both the Standard kernel line
+    # (`...VeeamJeOS:/<CFGname> quiet inst.assumeyes`) AND the Single Disk variant
+    # (`...VeeamJeOS:/<CFGname> inst.vsingledisk quiet`) get inst.assumeyes appended.
+    $pattern = "^(.*LABEL=VeeamJeOS:/$CFGname.*)$"
     Update-FileContent -FilePath "grub.cfg" -Pattern $pattern -Replacement '${1} inst.assumeyes'
-    $newDefault = '"Veeam Infrastructure Appliance (with iSCSI & NVMe/TCP)>Install - fresh install, wipes everything (including local backups)"'
+    $newDefault = if ($VIASingleDisk) {
+        '"[TBD]Veeam Single Disk Appliance>[TBD]Install - fresh install, wipes everything on available device"'
+    } else {
+        '"Veeam Infrastructure Appliance (with iSCSI & NVMe/TCP)>Install - fresh install, wipes everything (including local backups)"'
+    }
     Set-GrubDefaultAndTimeout -DefaultLabel $newDefault -Timeout $GrubTimeout
 
     Write-Log "Configuring Kickstart file..." 'Info'
@@ -1698,9 +1730,16 @@ function Invoke-VIAHR {
     Invoke-ISOExtractConfig -TargetISO $isoInfo.TargetISO -KickstartName $CFGname
 
     Write-Log "Configuring GRUB bootloader..." 'Info'
-    $pattern = "^(.*LABEL=VeeamJeOS:/$CFGname quiet.*)$"
+    # Broadened regex (v2.8): drops the `quiet` requirement so both the Standard kernel line
+    # (`...VeeamJeOS:/<CFGname> quiet inst.assumeyes`) AND the Single Disk variant
+    # (`...VeeamJeOS:/<CFGname> inst.vsingledisk quiet`) get inst.assumeyes appended.
+    $pattern = "^(.*LABEL=VeeamJeOS:/$CFGname.*)$"
     Update-FileContent -FilePath "grub.cfg" -Pattern $pattern -Replacement '${1} inst.assumeyes'
-    $newDefault = '"Veeam Hardened Repository>Install - fresh install, wipes everything (including local backups)"'
+    $newDefault = if ($VIASingleDisk) {
+        '"[TBD]Veeam Single Disk Appliance>[TBD]Install - fresh install, wipes everything on available device"'
+    } else {
+        '"Veeam Hardened Repository>Install - fresh install, wipes everything (including local backups)"'
+    }
     Set-GrubDefaultAndTimeout -DefaultLabel $newDefault -Timeout $GrubTimeout
 
     Write-Log "Configuring Kickstart file..." 'Info'

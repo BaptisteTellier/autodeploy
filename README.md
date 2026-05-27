@@ -28,6 +28,7 @@ This advanced PowerShell script automates the customization of Veeam Software Ap
 - **New JSON key `NodeExporterTLSEnabled`** (bool, default `false`). When `true`, runs `Set-VBRNodeExporterOptions -EnableMetricsSharing -EnableTLS` so the metrics endpoint switches from HTTP to HTTPS (`https://<VSA>/metrics`). Only effective when `NodeExporter=true`.
 - **NodeExporter is now VSA-only (BREAKING)**: `Set-VBRNodeExporterOptions` is a VBR cmdlet that does not exist on VIA/VIAVMware/VIAHR appliances. Setting `NodeExporter=true` on those workflows now throws early (same pattern as `VCSPConnection`/`LicenseVBRTune`/`RestoreConfig`). VIA appliance node_exporter configuration will be piloted by the VSA in a future release.
 - **applianceRole.role auto-injection for VIA appliances**: VSA 13.1 replaces the GRUB-based role selection with a declarative line in `/etc/veeam/vbr_init.cfg`. The script now auto-emits this line based on `ApplianceType`: `VIA` and `VIAVMware` -> `applianceRole.role=vbproxy`, `VIAHR` -> `applianceRole.role=veeam-lhr`. VSA omits the line (it has a dedicated ISO).
+- **New JSON key `VIASingleDisk` (VIA-only)**: bool, default `false`. When `true`, the script selects the "Veeam Single Disk Appliance" GRUB menu entry as the boot default (instead of the per-workflow default like "Veeam Infrastructure Appliance" / "(with iSCSI & NVMe/TCP)" / "Veeam Hardened Repository"). The Single Disk entry installs by wiping the entire available device (kernel passes `inst.vsingledisk`). Applies to `VIA`, `VIAVMware`, `VIAHR` — throws on `VSA` (which has its own ISO without a Single Disk entry). The GRUB regex that injects `inst.assumeyes` was broadened so both the Standard and Single Disk kernel lines get the non-interactive flag.
 - **Publish to main pending VSA 13.1 release**: v2.8 will land on `main` once VSA 13.1 is officially released. Until then, all v2.8 work stays on the `dev` branch.
 
 ## What's New (v2.7)
@@ -288,6 +289,7 @@ https://www.veeam.com/kb4772
 | RestoreConfig       | Bool    | Enable unattended Configuration Restore     | false                          |
 | ConfigPasswordSo    | String  | SO Config Password               | ""                                        |
 | Debug               | Bool    | enable root and ssh (don't use in production)             | false                                        |
+| VIASingleDisk       | Bool    | **VIA-only** (throws on VSA). Selects the "Veeam Single Disk Appliance" GRUB entry as the boot default (passes `inst.vsingledisk` -- wipes the entire available device). Requires the source VIA ISO to ship the Single Disk entry. | false |
 
 ---
 
