@@ -593,12 +593,13 @@ function Get-ModificationSummary {
     if (-not $EnableIPv6) {
         $summary += "  IPv6: Disabled (--noipv6)"
     }
+    $summary += "  NTP: $($NtpServer -join ', ')"
 
     $summary += ""
     $summary += "OPTIONAL FEATURES:"
-    $summary += "  Node Exporter: $(if ($NodeExporter) { 'Enabled' } else { 'Disabled' })"
     $summary += "  Debug: $(if ($ISOInfo.Debug) { 'Enabled' } else { 'Disabled' })"
     if($ApplianceType -eq "VSA"){
+    $summary += "  Node Exporter: $(if ($NodeExporter) { 'Enabled' } else { 'Disabled' })"
     $summary += "  License Auto-Install: $(if ($LicenseVBRTune) { 'Enabled' } else { 'Disabled' })"
     $summary += "  VCSP Connection: $(if ($VCSPConnection) { 'Enabled' } else { 'Disabled' })"
     $summary += "  Restore Config: $(if ($ISOInfo.RestoreConfig) { 'Enabled' } else { 'Disabled' })"
