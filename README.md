@@ -25,9 +25,11 @@ This advanced PowerShell script automates the customization of Veeam Software Ap
   - `HighAvailabilityTimeout` (int seconds, default `3600` = 60 min) -> rendered as `highAvailability.timeout=<sec>`
 - **NodeExporter refactor (BREAKING, VSA 13.1+ required)**: `node_exporter` is now built-in to VSA 13.1 via Veeam Backup & Replication. The script no longer copies an `offline_repo/`, no longer installs the RPM, no longer creates a systemd unit, and no longer opens firewall port 9100. Activation is now a one-liner: `Set-VBRNodeExporterOptions -EnableMetricsSharing` (via the existing `NodeExporter` JSON key, default `false`). Verification endpoint changes from `http://<VSA>:9100/metrics` to `http://<VSA>/metrics` (port 80, or 443 with TLS).
 - **New JSON key `NodeExporterTLSEnabled`** (bool, default `false`). When `true`, runs `Set-VBRNodeExporterOptions -EnableMetricsSharing -EnableTLS` so the metrics endpoint switches from HTTP to HTTPS (`https://<VSA>/metrics`). Only effective when `NodeExporter=true`.
-- **NodeExporter is now VSA-only (BREAKING)**: `Set-VBRNodeExporterOptions` is a VBR cmdlet that does not exist on VIA/VIAVMware/VIAHR appliances. Setting `NodeExporter=true` on those workflows now throws early (same pattern as `VCSPConnection`/`LicenseVBRTune`/`RestoreConfig`). VIA appliance node_exporter configuration will be piloted by the VSA in a future release.
-- **applianceRole.role auto-injection for VIA appliances**: VSA 13.1 replaces the GRUB-based role selection with a declarative line in `/etc/veeam/vbr_init.cfg`. The script now auto-emits this line based on `ApplianceType`: `VIA` and `VIAVMware` -> `applianceRole.role=vbproxy`, `VIAHR` -> `applianceRole.role=veeam-lhr`. VSA omits the line (it has a dedicated ISO).
-- **New JSON key `VIASingleDisk` (VIA-only)**: bool, default `false`. When `true`, the script selects the "Veeam Single Disk Appliance" GRUB menu entry as the boot default (instead of the per-workflow default like "Veeam Infrastructure Appliance" / "(with iSCSI & NVMe/TCP)" / "Veeam Hardened Repository"). The Single Disk entry installs by wiping the entire available device (kernel passes `inst.vsingledisk`). Applies to `VIA`, `VIAVMware`, `VIAHR` — throws on `VSA` (which has its own ISO without a Single Disk entry). The GRUB regex that injects `inst.assumeyes` was broadened so both the Standard and Single Disk kernel lines get the non-interactive flag.
+- **NodeExporter is now VSA-only (BREAKING)**: `Set-VBRNodeExporterOptions` is a VBR cmdlet that does not exist on VIA/VIAiscsi/VIAHR appliances. Setting `NodeExporter=true` on those workflows now throws early (same pattern as `VCSPConnection`/`LicenseVBRTune`/`RestoreConfig`). VIA appliance node_exporter configuration will be piloted by the VSA in a future release.
+- **applianceRole.role auto-injection for VIA appliances**: VSA 13.1 replaces the GRUB-based role selection with a declarative line in `/etc/veeam/vbr_init.cfg`. The script now auto-emits this line based on `ApplianceType`: `VIA` -> `applianceRole.role=vbproxy`, `VIAiscsi` -> `applianceRole.role=vbproxy` + `applianceRole.iSCSI=true`, `VIAHR` -> `applianceRole.role=veeam-lhr`. VSA omits the line (it has a dedicated ISO).
+- **`ApplianceType=VIAVMware` renamed to `VIAiscsi`**: the iSCSI / NVMe-TCP proxy workflow is now identified as `VIAiscsi` in JSON. Update your JSON files accordingly. The new `viascsi.json` example file is provided.
+- **New JSON key `VIASingleDisk` (VIA-only)**: bool, default `false`. When `true`, the script selects the "Veeam Single Disk Appliance" GRUB menu entry as the boot default instead of the unified standard label. The Single Disk entry installs by wiping the entire available device (kernel passes `inst.vsingledisk`). Applies to `VIA`, `VIAiscsi`, `VIAHR` — throws on `VSA` (which has its own ISO without a Single Disk entry). The GRUB regex that injects `inst.assumeyes` was broadened so both the Standard and Single Disk kernel lines get the non-interactive flag.
+- **Unified GRUB default label for all three VIA workflows**: `VIA`, `VIAiscsi`, and `VIAHR` now all use `[TBD]Veeam Infrastructure Standart Appliance>Install - fresh install, wipes everything (including local backups)` as the standard GRUB default (overridden by `VIASingleDisk=true`).
 - **Publish to main pending VSA 13.1 release**: v2.8 will land on `main` once VSA 13.1 is officially released. Until then, all v2.8 work stays on the `dev` branch.
 
 ## What's New (v2.7)
@@ -45,7 +47,7 @@ This advanced PowerShell script automates the customization of Veeam Software Ap
 ## Features
 
 - Load configuration from JSON for reproducible deployments
-- APPLIANCE TYPE SELECTION: Support for VSA, VIA, VIAVMware, and VIAHR appliances with dedicated deployment workflows
+- APPLIANCE TYPE SELECTION: Support for VSA, VIA, VIAiscsi, and VIAHR appliances with dedicated deployment workflows
 - Modify ISO files (create custom copies or modify in place)
 - Automated GRUB and Kickstart configuration injection
 - DHCP and static IP support, validated in script
@@ -103,7 +105,7 @@ https://www.veeam.com/kb4772
 
 **node_exporter**
 - No extra files required -- node_exporter ships with VSA 13.1+ and is enabled via VBR cmdlet.
-- VSA-only feature; setting `NodeExporter=true` on VIA/VIAVMware/VIAHR throws.
+- VSA-only feature; setting `NodeExporter=true` on VIA/VIAiscsi/VIAHR throws.
 
 **Veeam Service Provider support**
 - fill json parameters starting with VCSP
@@ -196,7 +198,7 @@ https://www.veeam.com/kb4772
 | `-ConfigFile` (CLI only) | String | Path to the JSON configuration file (the ONLY CLI argument) | _(none)_ | **Yes** |
 | SourceISO     | String | Source ISO filename (required)    | VeeamSoftwareAppliance_13.0.0.4967_20250822.iso | Yes         |
 | OutputISO     | String | Customized ISO filename           | auto (adds _customized)                   | No          |
-| ApplianceType    | String | VSA, VIA, VIAVMware, and VIAHR | VSA                                       | No          |
+| ApplianceType    | String | VSA, VIA, VIAiscsi, VIAHR | VSA                                       | No          |
 | InPlace       | Bool   | Modify original ISO directly      | false                                     | No          |
 | CreateBackup  | Bool   | Create backup for InPlace changes | true                                      | No          |
 | CleanupCFGFiles| Bool  | Clean temp config files           | true                                      | No          |
@@ -239,7 +241,7 @@ https://www.veeam.com/kb4772
 
 | Parameter           | Type    | Description                      | Default                                   |
 |---------------------|---------|----------------------------------|-------------------------------------------|
-| NodeExporter        | Bool    | VSA-only (13.1+). Enables `node_exporter` metrics sharing via the built-in VBR cmdlet `Set-VBRNodeExporterOptions -EnableMetricsSharing`. Endpoint: `http://<VSA>/metrics` (port 80). Throws if set on VIA/VIAVMware/VIAHR. | false                |
+| NodeExporter        | Bool    | VSA-only (13.1+). Enables `node_exporter` metrics sharing via the built-in VBR cmdlet `Set-VBRNodeExporterOptions -EnableMetricsSharing`. Endpoint: `http://<VSA>/metrics` (port 80). Throws if set on VIA/VIAiscsi/VIAHR. | false                |
 | NodeExporterTLSEnabled | Bool | Enable TLS on the node_exporter metrics endpoint. When `true`, runs `Set-VBRNodeExporterOptions -EnableMetricsSharing -EnableTLS` and the endpoint becomes `https://<VSA>/metrics`. Only effective when `NodeExporter=true`. VSA-only. | false |
 | LicenseVBRTune      | Bool    | Auto-install Veeam license (only VSA) | false                                |
 | LicenseFile         | String  | License filename                 | Veeam-100instances-entplus-monitoring-nfr.lic |
@@ -291,7 +293,7 @@ https://www.veeam.com/kb4772
 - Enable via JSON: `"NodeExporter": true` (default `false`).
 - Optional TLS: `"NodeExporterTLSEnabled": true` switches the metrics endpoint from HTTP to HTTPS.
 - Verification after deployment: visit `http://<VSA-IP>/metrics` (or `https://<VSA-IP>/metrics` with TLS).
-- Setting `NodeExporter=true` on VIA / VIAVMware / VIAHR throws early -- these appliances will be piloted by the VSA in a future release.
+- Setting `NodeExporter=true` on VIA / VIAiscsi / VIAHR throws early -- these appliances will be piloted by the VSA in a future release.
 - No extra files required in the script directory (the previous `offline_repo/` RPM install method is gone).
 
 ### VBR Tunning

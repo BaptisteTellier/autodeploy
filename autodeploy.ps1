@@ -21,7 +21,7 @@ Now supports two appliance types: VSA (Veeam Software Appliance) and VIA (Veeam 
 The script is designed to run in the same directory as the source ISO file and creates customized copies without complex path handling.
 
 Enhanced Features:
-- APPLIANCE TYPE SELECTION: Support for VSA, VIA, VIAVMware, and VIAHR appliances with dedicated deployment workflows
+- APPLIANCE TYPE SELECTION: Support for VSA, VIA, VIAiscsi, and VIAHR appliances with dedicated deployment workflows
 - JSON CONFIGURATION SUPPORT: Load all parameters from JSON configuration files for easy deployment management
 - OUT-OF-PLACE ISO MODIFICATION: Creates customized copies without modifying the original ISO
 - PATH HANDLING: Works ONLY in the current directory to avoid WSL path issues
@@ -37,10 +37,10 @@ The script utilizes WSL (Windows Subsystem for Linux) with xorriso for ISO manip
 official Veeam documentation: https://helpcenter.veeam.com/docs/vbr/userguide/deployment_linux_silent_deploy_configure.html?ver=13
 
 .PARAMETER ApplianceType
-Specifies the type of Veeam appliance to customize. Valid values: "VSA", "VIA", "VIAVMware", "VIAHR"
+Specifies the type of Veeam appliance to customize. Valid values: "VSA", "VIA", "VIAiscsi", "VIAHR"
 - VSA: Veeam Software appliance (default behavior)
 - VIA: Veeam Infrastructure Appliance (JeOS - Proxy)
-- VIAVMware: Veeam Infrastructure Appliance (with iSCSI & NVMe/TCP)
+- VIAiscsi: Veeam Infrastructure Appliance (with iSCSI & NVMe/TCP) -- also sets applianceRole.iSCSI=true
 - VIAHR: Veeam Hardened Repository (JeOS - Hardened Repository)
 Default: "VSA"
 
@@ -240,10 +240,10 @@ WARNING: Only use in test/development environments. Do not use in production.
 Default: $false
 
 .PARAMETER VIASingleDisk
-VIA-only flag (applies to ApplianceType=VIA, VIAVMware, VIAHR -- throws on VSA).
+VIA-only flag (applies to ApplianceType=VIA, VIAiscsi, VIAHR -- throws on VSA).
 When $true, sets the GRUB default menu entry to "Veeam Single Disk Appliance" instead
-of the per-workflow default ("Veeam Infrastructure Appliance" / "(with iSCSI & NVMe/TCP)" /
-"Veeam Hardened Repository"). The Single Disk entry installs by wiping the entire
+of the standard "[TBD]Veeam Infrastructure Standart Appliance" label shared by all three
+VIA workflows. The Single Disk entry installs by wiping the entire
 available device (passes `inst.vsingledisk` to the installer).
 Requires the source VIA ISO to ship the "Veeam Single Disk Appliance" GRUB menu entry.
 Default: $false
@@ -605,7 +605,7 @@ function Get-ModificationSummary {
     $summary += "  External Managers Installation: $(if ($ExternalManagersInstallationEnabled) { 'Enabled' } else { 'Disabled' }) (timeout ${ExternalManagersInstallationTimeout}s)"
     $summary += "  High Availability: $(if ($HighAvailabilityEnabled) { 'Enabled' } else { 'Disabled' }) (timeout ${HighAvailabilityTimeout}s)"
     }
-    if($ApplianceType -in 'VIA','VIAVMware','VIAHR'){
+    if($ApplianceType -in 'VIA','VIAiscsi','VIAHR'){
     $summary += "  Single Disk Appliance: $(if ($VIASingleDisk) { 'Enabled' } else { 'Disabled' })"
     }
     $summary += "=================================================================================================="
@@ -1116,10 +1116,10 @@ function Get-VeeamHostConfigBlock {
     # v2.8: VSA 13.1 replaces the GRUB-based VIA role selection with a declarative
     # applianceRole.role config in vbr_init.cfg. VSA has its own ISO and omits the line.
     $roleLine = switch ($ApplianceType) {
-        "VIA"       { @("applianceRole.role=vbproxy") }
-        "VIAVMware" { @("applianceRole.role=vbproxy") }
-        "VIAHR"     { @("applianceRole.role=veeam-lhr") }
-        default     { @() }
+        "VIA"      { @("applianceRole.role=vbproxy") }
+        "VIAiscsi" { @("applianceRole.role=vbproxy", "applianceRole.iSCSI=true") }
+        "VIAHR"    { @("applianceRole.role=veeam-lhr") }
+        default    { @() }
     }
 
     return @(
@@ -1341,7 +1341,7 @@ function Invoke-VSA {
 
     # VIA-only flag: VIASingleDisk has no effect on VSA (VSA has its own ISO with no Single Disk entry).
     if ($VIASingleDisk) {
-        throw "VIASingleDisk=true is only supported for ApplianceType='VIA', 'VIAVMware', or 'VIAHR'. Current ApplianceType is 'VSA'. Set VIASingleDisk=false in your JSON or change ApplianceType to a VIA workflow."
+        throw "VIASingleDisk=true is only supported for ApplianceType='VIA', 'VIAiscsi', or 'VIAHR'. Current ApplianceType is 'VSA'. Set VIASingleDisk=false in your JSON or change ApplianceType to a VIA workflow."
     }
 
     # v2.8 consistency: VCSP integration requires external managers installation enabled.
@@ -1575,11 +1575,11 @@ function Invoke-VIA {
 
 #endregion
 
-#region VIAVMware Region Function
+#region VIAiscsi Region Function
 
-function Invoke-VIAVMware {
+function Invoke-VIAiscsi {
     Write-Log "=================================================================================================="
-    Write-Log "                         VIA WORKFLOW - Veeam Infrastructure Appliance (with iSCSI & NVMe/TCP)"
+    Write-Log "                         VIA WORKFLOW - Veeam Infrastructure Appliance (iSCSI / NVMe-TCP proxy)"
     Write-Log "=================================================================================================="
 
     $CFGname = "vmware-proxy-ks.cfg"
@@ -1637,7 +1637,7 @@ function Invoke-VIAVMware {
     $newDefault = if ($VIASingleDisk) {
         '"[TBD]Veeam Single Disk Appliance>[TBD]Install - fresh install, wipes everything on available device"'
     } else {
-        '"Veeam Infrastructure Appliance (with iSCSI & NVMe/TCP)>Install - fresh install, wipes everything (including local backups)"'
+        '"[TBD]Veeam Infrastructure Standart Appliance>Install - fresh install, wipes everything (including local backups)"'
     }
     Set-GrubDefaultAndTimeout -DefaultLabel $newDefault -Timeout $GrubTimeout
 
@@ -1655,7 +1655,7 @@ function Invoke-VIAVMware {
 
     Add-ContentAfterLine -FilePath "$CFGname" -TargetLine 'find /etc/yum.repos.d/ -type f -not -name "*veeam*" -delete' -NewLines (Get-VeeamHostConfigBlock)
     #####
-    #Optional Modifications 
+    #Optional Modifications
     #####
 
     #####
@@ -1738,7 +1738,7 @@ function Invoke-VIAHR {
     $newDefault = if ($VIASingleDisk) {
         '"[TBD]Veeam Single Disk Appliance>[TBD]Install - fresh install, wipes everything on available device"'
     } else {
-        '"Veeam Hardened Repository>Install - fresh install, wipes everything (including local backups)"'
+        '"[TBD]Veeam Infrastructure Standart Appliance>Install - fresh install, wipes everything (including local backups)"'
     }
     Set-GrubDefaultAndTimeout -DefaultLabel $newDefault -Timeout $GrubTimeout
 
@@ -1796,7 +1796,7 @@ try {
     Write-Log "Configuration loaded from JSON file: $ConfigFile" 'Info'
 
     # Post-load validation (ValidateSet was on the param block, now gone).
-    $validApplianceTypes = @('VSA', 'VIA', 'VIAVMware', 'VIAHR')
+    $validApplianceTypes = @('VSA', 'VIA', 'VIAiscsi', 'VIAHR')
     if ($ApplianceType -notin $validApplianceTypes) {
         throw "Invalid ApplianceType '$ApplianceType' in JSON. Must be one of: $($validApplianceTypes -join ', ')"
     }
@@ -1812,9 +1812,9 @@ try {
             Write-Log "Invoking Veeam Infrastructure Appliance workflow..." 'Info'
             $resultISO = Invoke-VIA
         }
-        "VIAVMware" {
-            Write-Log "Invoking Veeam Infrastructure Appliance (with iSCSI & NVMe/TCP) workflow..." 'Info'
-            $resultISO = Invoke-VIAVMware
+        "VIAiscsi" {
+            Write-Log "Invoking Veeam Infrastructure Appliance (iSCSI / NVMe-TCP proxy) workflow..." 'Info'
+            $resultISO = Invoke-VIAiscsi
         }
         "VIAHR" {
             Write-Log "Invoking Veeam Hardened Repository workflow..." 'Info'
