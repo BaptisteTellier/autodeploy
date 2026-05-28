@@ -1104,15 +1104,17 @@ function Get-DisableIPv6PostBlock {
 }
 
 function Get-VeeamHostConfigBlock {
-    # v2.8 (VSA 13.1): externalManagersInstallation + highAvailability config lines.
-    # Both .enabled and .timeout are always emitted -- timeouts default to 3600 sec (60 min).
-    # When the timeout expires, Veeam Host Manager automatically disables the corresponding option.
-    $extraConfigLines = @(
-        "externalManagersInstallation.enabled=$(if ($ExternalManagersInstallationEnabled) { 'true' } else { 'false' })",
-        "externalManagersInstallation.timeout=$ExternalManagersInstallationTimeout",
-        "highAvailability.enabled=$(if ($HighAvailabilityEnabled) { 'true' } else { 'false' })",
-        "highAvailability.timeout=$HighAvailabilityTimeout"
-    )
+    # v2.8 (VSA 13.1 only): externalManagersInstallation + highAvailability config lines.
+    # These options are managed by Veeam Host Manager and only apply to VSA.
+    # VIA/VIAiscsi/VIAHR do not have a host manager that understands these keys.
+    $extraConfigLines = if ($ApplianceType -eq "VSA") {
+        @(
+            "externalManagersInstallation.enabled=$(if ($ExternalManagersInstallationEnabled) { 'true' } else { 'false' })",
+            "externalManagersInstallation.timeout=$ExternalManagersInstallationTimeout",
+            "highAvailability.enabled=$(if ($HighAvailabilityEnabled) { 'true' } else { 'false' })",
+            "highAvailability.timeout=$HighAvailabilityTimeout"
+        )
+    } else { @() }
 
     # v2.8: VSA 13.1 replaces the GRUB-based VIA role selection with a declarative
     # applianceRole.role config in vbr_init.cfg. VSA has its own ISO and omits the line.
