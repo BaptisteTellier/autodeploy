@@ -1585,7 +1585,7 @@ function Invoke-VIAiscsi {
     Write-Log "                         VIA WORKFLOW - Veeam Infrastructure Appliance (iSCSI / NVMe-TCP proxy)"
     Write-Log "=================================================================================================="
 
-    $CFGname = "vmware-proxy-ks.cfg"
+    $CFGname = "proxy-ks.cfg"
     $script:ActiveCfgFile = $CFGname
 
     Write-Log "Config only set to $CFGOnly" 'Info'
@@ -1686,7 +1686,7 @@ function Invoke-VIAHR {
     Write-Log "                         VIA WORKFLOW - Veeam Hardened Repository"
     Write-Log "=================================================================================================="
 
-    $CFGname = "hardened-repo-ks.cfg"
+    $CFGname = "proxy-ks.cfg"
     $script:ActiveCfgFile = $CFGname
 
     Write-Log "Config only set to $CFGOnly" 'Info'
