@@ -232,28 +232,40 @@ https://www.veeam.com/kb4772
 | VeeamSoIsEnabled | String | Enable/disable the Security Officer account entirely ("true"/"false") | `"true"` |
 | NtpServer | String OR Array&lt;String&gt; | NTP server(s) for time synchronization (FQDN or IP). Single string for one server, array for multiple — e.g. `["ntp1.example.local","ntp2.example.local"]` | `["time.nist.gov"]` |
 | NtpRunSync | String | Enable automatic time synchronization on boot ("true"/"false") - if sync fails customization fails | `"true"` |
-| ExternalManagersInstallationEnabled | Bool | VSA 13.1+. Allow installation of external managers. | `false` |
-| ExternalManagersInstallationTimeout | Int | VSA 13.1+. Timeout (in seconds) for the external managers installation window.  | `3600` (60 min) |
-| HighAvailabilityEnabled | Bool | VSA 13.1+. Enable HA mode on the appliance. | `false` |
-| HighAvailabilityTimeout | Int | VSA 13.1+. Timeout (in seconds) for the HA initialization window. | `3600` (60 min) |
 
 ### Optional Features
 
-| Parameter           | Type    | Description                      | Default                                   |
-|---------------------|---------|----------------------------------|-------------------------------------------|
-| NodeExporter        | Bool    | VSA-only (13.1+). Enables `node_exporter` metrics sharing via the built-in VBR cmdlet `Set-VBRNodeExporterOptions -EnableMetricsSharing`. Endpoint: `http://<VSA>/metrics` (port 80). Throws if set on VIA/VIAiscsi/VIAHR. | false                |
-| NodeExporterTLSEnabled | Bool | Enable TLS on the node_exporter metrics endpoint. When `true`, runs `Set-VBRNodeExporterOptions -EnableMetricsSharing -EnableTLS` and the endpoint becomes `https://<VSA>/metrics`. Only effective when `NodeExporter=true`. VSA-only. | false |
-| LicenseVBRTune      | Bool    | Auto-install Veeam license (only VSA) | false                                |
-| LicenseFile         | String  | License filename                 | Veeam-100instances-entplus-monitoring-nfr.lic |
-| SyslogServer        | String  | Syslog server IP                 | ""                                        |
-| VCSPConnection      | Bool    | Connect to VCSP  (only VSA)      | false                                     |
-| VCSPUrl             | String  | VCSP server URL                  | ""                                        |
-| VCSPLogin           | String  | VCSP tenant's login              | ""                                        |
-| VCSPPassword        | String  | VCSP tenant's password           | ""                                        |
-| RestoreConfig       | Bool    | Enable unattended Configuration Restore     | false                          |
-| ConfigPasswordSo    | String  | SO Config Password               | ""                                        |
-| Debug               | Bool    | enable root and ssh (don't use in production)             | false                                        |
-| VIASingleDisk       | Bool    | **VIA-only** (throws on VSA). Selects the "Veeam Single Disk Appliance" GRUB entry as the boot default (passes `inst.vsingledisk` -- wipes the entire available device). Requires the source VIA ISO to ship the Single Disk entry. | false |
+#### All appliances
+
+| Parameter | Type   | Description                                              | Default |
+|-----------|--------|----------------------------------------------------------|---------|
+| Debug     | Bool   | Enable root SSH access during install. **Do not use in production.** | false |
+
+#### VSA only
+
+| Parameter                           | Type   | Description                                                                                                                                                                                       | Default                                          |
+|-------------------------------------|--------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|--------------------------------------------------|
+| NodeExporter                        | Bool   | VSA 13.1+. Enables `node_exporter` metrics sharing via `Set-VBRNodeExporterOptions -EnableMetricsSharing`. Endpoint: `http://<VSA>/metrics` (port 80). Throws on VIA/VIAiscsi/VIAHR.            | false                                            |
+| NodeExporterTLSEnabled              | Bool   | Enable TLS on the metrics endpoint (`https://<VSA>/metrics`). Only effective when `NodeExporter=true`.                                                                                            | false                                            |
+| LicenseVBRTune                      | Bool   | Auto-install Veeam license.                                                                                                                                                                       | false                                            |
+| LicenseFile                         | String | License filename (placed in the `license/` folder).                                                                                                                                               | Veeam-100instances-entplus-monitoring-nfr.lic    |
+| SyslogServer                        | String | Syslog server IP.                                                                                                                                                                                 | ""                                               |
+| VCSPConnection                      | Bool   | Connect to a VCSP and install the Management Agent. Requires `ExternalManagersInstallationEnabled=true` (auto-enforced).                                                                          | false                                            |
+| VCSPUrl                             | String | VCSP server address.                                                                                                                                                                              | ""                                               |
+| VCSPLogin                           | String | VCSP tenant login.                                                                                                                                                                                | ""                                               |
+| VCSPPassword                        | String | VCSP tenant password.                                                                                                                                                                             | ""                                               |
+| RestoreConfig                       | Bool   | Enable unattended configuration restore from backup.                                                                                                                                              | false                                            |
+| ConfigPasswordSo                    | String | Security Officer password used to decrypt the configuration backup.                                                                                                                               | ""                                               |
+| ExternalManagersInstallationEnabled | Bool   | VSA 13.1+. Allow installation of external managers. After the timeout expires, Veeam Host Manager automatically disables the option.                                                              | false                                            |
+| ExternalManagersInstallationTimeout | Int    | VSA 13.1+. Timeout (seconds) for the external managers installation window.                                                                                                                       | 3600 (60 min)                                    |
+| HighAvailabilityEnabled             | Bool   | VSA 13.1+. Enable HA mode on the appliance. After the timeout expires, Veeam Host Manager automatically disables the option.                                                                      | false                                            |
+| HighAvailabilityTimeout             | Int    | VSA 13.1+. Timeout (seconds) for the HA initialization window.                                                                                                                                    | 3600 (60 min)                                    |
+
+#### VIA only (VIA / VIAiscsi / VIAHR)
+
+| Parameter    | Type | Description                                                                                                                                                                  | Default |
+|--------------|------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|---------|
+| VIASingleDisk | Bool | Selects the "Veeam Single Disk Appliance" GRUB entry as the boot default (passes `inst.vsingledisk` — wipes the entire available device). Throws on VSA. | false |
 
 ---
 
