@@ -295,6 +295,7 @@ https://www.veeam.com/kb4772
 
 ### File Security
 - **Transcript Logging**: Comprehensive logging with timestamp and severity levels
+- **Cleartext secrets in generated `.cfg`**: The generated kickstart (`vbr-ks.cfg` / `proxy-ks.cfg`) necessarily contains all Veeam passwords, MFA secret keys and recovery tokens in cleartext. With `CleanupCFGFiles=true` (default) it is deleted after the ISO is built, but it **persists** when `CFGOnly=true` or `CleanupCFGFiles=false`. Treat these `.cfg` files — and the produced ISO — as secret material and store/shred them accordingly. The `ISO_Customization.log` does **not** record credentials (only ISO/xorriso commands are logged).
 
 ---
 
@@ -431,7 +432,7 @@ Process completed successfully
 ## Contributing
 
 1. Fork this repo and create a pull request to suggest improvements.
-2. Use [GitHub Issues](https://github.com/PleXi00/autodeploy/issues) for bugs or feature requests.
+2. Use [GitHub Issues](https://github.com/BaptisteTellier/autodeploy/issues) for bugs or feature requests.
 
 ## Support
 
@@ -446,13 +447,13 @@ Process completed successfully
 ## Author & Stats
 
 **Author**: Baptiste TELLIER  
-**Version**: 2.6.2
+**Version**: 2.8
 **Creation**: November 28, 2025
 
-![GitHub stars](https://img.shields.io/github/stars/PleXi00/autodeploy)
-![GitHub forks](https://img.shields.io/github/forks/PleXi00/autodeploy)
-![GitHub issues](https://img.shields.io/github/issues/PleXi00/autodeploy)
-![GitHub last commit](https://img.shields.io/github/last-commit/PleXi00/autodeploy)
+![GitHub stars](https://img.shields.io/github/stars/BaptisteTellier/autodeploy)
+![GitHub forks](https://img.shields.io/github/forks/BaptisteTellier/autodeploy)
+![GitHub issues](https://img.shields.io/github/issues/BaptisteTellier/autodeploy)
+![GitHub last commit](https://img.shields.io/github/last-commit/BaptisteTellier/autodeploy)
 
 ---
 
