@@ -241,10 +241,11 @@ Default: $false
 
 .PARAMETER VIASingleDisk
 VIA-only flag (applies to ApplianceType=VIA, VIAiscsi, VIAHR -- throws on VSA).
-When $true, sets the GRUB default menu entry to "Veeam Single Disk Appliance" instead
-of the standard "[TBD]Veeam Infrastructure Standart Appliance" label shared by all three
-VIA workflows. The Single Disk entry installs by wiping the entire
-available device (passes `inst.vsingledisk` to the installer).
+When $true, the script selects the source ISO's existing "Veeam Single Disk Appliance"
+GRUB menu entry as the boot default, instead of the standard
+"[TBD]Veeam Infrastructure Standart Appliance" label shared by all three VIA workflows.
+The script does NOT add any kernel flag itself -- it relies on that pre-existing menu
+entry (which already passes `inst.vsingledisk`, wiping the entire available device).
 Requires the source VIA ISO to ship the "Veeam Single Disk Appliance" GRUB menu entry.
 Default: $false
 
@@ -283,6 +284,14 @@ OUTPUT:
 - grub.cfg (optional)
 - vbr-ks.cfg (optional)
 - ISO_Customization.log
+
+SECURITY NOTE:
+- The generated kickstart (vbr-ks.cfg / proxy-ks.cfg) necessarily contains all Veeam
+  passwords, MFA secret keys and recovery tokens in cleartext. With CleanupCFGFiles=$true
+  (default) it is deleted after the ISO is built, but it persists when CFGOnly=$true or
+  CleanupCFGFiles=$false. Treat these .cfg files -- and the produced ISO -- as secret
+  material and store/shred them accordingly. The ISO_Customization log does not record
+  credentials (only ISO/xorriso commands are logged).
 
 #>
 
@@ -438,6 +447,53 @@ function Update-ParametersFromJSON {
     if ($script:NtpServer -isnot [array]) { $script:NtpServer = @($script:NtpServer) }
 
     Write-Log "Applied $parametersUpdated parameters from JSON configuration" 'Info'
+}
+
+function Test-ParameterSafety {
+    # A handful of JSON values are interpolated into the GENERATED kickstart's nested
+    # shell / PowerShell command contexts. Characters that close those quote contexts --
+    # or trigger expansion when the kickstart runs as root on the appliance -- would
+    # corrupt the generated script or change what executes. Reject them early with a
+    # clear message, rather than trying to escape through 2-3 nested quoting layers.
+    #
+    # NOTE: the main credential block (vbr_init.cfg) uses a quoted 'EOF' heredoc, so
+    # passwords there are fully literal and may contain $, !, etc. We therefore only
+    # constrain the values that still land in quoted command arguments below.
+
+    $q = "'"; $dq = '"'; $bt = '`'; $dl = '$'; $nl = "`r`n"
+
+    $checks = @(
+        # Passed as single-quoted bash args to veeam_addsoconfpw.sh -> a single quote
+        # (or newline) breaks out of the argument. $ and other chars are safe (single
+        # quotes suppress bash expansion).
+        @{ Names = @('VeeamSoPassword', 'VeeamSoMfaSecretKey', 'ConfigPasswordSo')
+           Forbidden = [char[]]($q + $nl)
+           Context = "a single-quoted shell argument" }
+
+        # Interpolated into pwsh -Command '... "<value>" ...' in the VCSP block: the bash
+        # single quote ('), the PowerShell string quote ("), the PowerShell escape (`)
+        # and $ (PS expansion at appliance runtime) all break or alter the command.
+        @{ Names = @('VCSPUrl', 'VCSPLogin', 'VCSPPassword')
+           Forbidden = [char[]]($q + $dq + $bt + $dl + $nl)
+           Context = "a PowerShell command argument" }
+
+        # Used as filenames in xorriso (cmd /c) and bash cp/chmod commands.
+        @{ Names = @('SourceISO', 'OutputISO', 'LicenseFile')
+           Forbidden = [char[]]($q + $dq + $bt + $dl + ';&|<>' + $nl)
+           Context = "a filename in a shell command" }
+    )
+
+    foreach ($check in $checks) {
+        foreach ($name in $check.Names) {
+            $val = Get-Variable -Name $name -Scope Script -ValueOnly -ErrorAction SilentlyContinue
+            if ([string]::IsNullOrEmpty($val)) { continue }   # empty/optional values are fine
+            if (([string]$val).IndexOfAny($check.Forbidden) -ge 0) {
+                throw "Parameter '$name' contains a disallowed character. Its value is interpolated into $($check.Context) in the generated kickstart, where a quote, backtick, dollar sign or control character would break or alter the command. Please remove such characters."
+            }
+        }
+    }
+
+    Write-Log "Parameter safety validation passed" 'Info'
 }
 
 #endregion
@@ -1130,7 +1186,10 @@ function Get-VeeamHostConfigBlock {
         "###############################################################################",
         "# Automatic Host Manager configuration file",
         "###############################################################################",
-        "cat << EOF >> /etc/veeam/vbr_init.cfg",
+        # Quoted 'EOF' terminator: the lines below are literal key=value config entries.
+        # Quoting prevents bash on the appliance from expanding any $, backtick, or $(...)
+        # that legitimately appears inside a password/MFA key/token value during %post.
+        "cat << 'EOF' >> /etc/veeam/vbr_init.cfg",
         "veeamadmin.password=$VeeamAdminPassword",
         "veeamadmin.mfaSecretKey=$VeeamAdminMfaSecretKey",
         "veeamadmin.isMfaEnabled=$VeeamAdminIsMfaEnabled",
@@ -1169,7 +1228,7 @@ function Get-VeeamHostConfigBlock {
         "systemctl restart getty@tty5.service",
         "echo 'OK : Getty services restarted'",
         "echo '==========================================='",
-        "echo 'Veeam VSA Initialization Completed Successfully'",
+        "echo 'Veeam Appliance Initialization Completed Successfully'",
         "echo '==========================================='",
         "echo 'All logs consolidated in: /var/log/veeam_init.log'",
         "echo '==========================================='",
@@ -1796,6 +1855,7 @@ try {
     Set-DefaultParameter
     $jsonConfig = Import-JSONConfig -ConfigFilePath $ConfigFile
     Update-ParametersFromJSON -Config $jsonConfig
+    Test-ParameterSafety
     Write-Log "Configuration loaded from JSON file: $ConfigFile" 'Info'
 
     # Post-load validation (ValidateSet was on the param block, now gone).
