@@ -483,6 +483,35 @@ function Initialize-ISOOperation {
     }
 }
 
+function Resolve-XorrisoInvoker {
+    <#
+    .SYNOPSIS
+        Determines how to launch xorriso on the current platform.
+    .DESCRIPTION
+        Windows has no native xorriso, so it is invoked through WSL. macOS and
+        Linux call the binary directly. Called once at startup; every xorriso
+        call then goes through Invoke-Xorriso without knowing the platform.
+
+        WindowsPlatform is a parameter rather than a direct $IsWindows read so
+        both branches can be tested - $IsWindows is read-only and cannot be
+        mocked.
+    #>
+    param(
+        [bool]$WindowsPlatform = $IsWindows
+    )
+
+    if ($WindowsPlatform) {
+        $script:XorrisoCommand   = 'wsl'
+        $script:XorrisoArgPrefix = @('xorriso')
+    }
+    else {
+        $script:XorrisoCommand   = 'xorriso'
+        $script:XorrisoArgPrefix = @()
+    }
+
+    Write-Log "xorriso invoker: $script:XorrisoCommand $($script:XorrisoArgPrefix -join ' ')" 'Info'
+}
+
 function Invoke-WSLCommand {
     param(
         [Parameter(Mandatory = $true)]
