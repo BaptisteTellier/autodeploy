@@ -24,7 +24,7 @@ Enhanced Features:
 - APPLIANCE TYPE SELECTION: Support for VSA, VIA, VIAVMware, and VIAHR appliances with dedicated deployment workflows
 - JSON CONFIGURATION SUPPORT: Load all parameters from JSON configuration files for easy deployment management
 - OUT-OF-PLACE ISO MODIFICATION: Creates customized copies without modifying the original ISO
-- PATH HANDLING: Works ONLY in the current directory to avoid WSL path issues
+- PATH HANDLING: Works ONLY in the current directory to keep paths portable across platforms
 - Network Configuration: Supports both DHCP and static IP configurations with comprehensive validation
 - Regional Settings: Configures keyboard layouts and timezone settings with proper validation
 - Veeam Configuration Management: Implements Veeam auto deploy 
@@ -32,7 +32,8 @@ Enhanced Features:
 - Service Provider Integration: Automated VCSP connection and management agent installation - v13.0.1 required
 - Enterprise Logging: Comprehensive logging system with timestamped Info/Warn/Error levels + output log file in current folder
 
-The script utilizes WSL (Windows Subsystem for Linux) with xorriso for ISO manipulation.
+The script uses xorriso for ISO manipulation. On macOS and Linux xorriso is called directly;
+on Windows it is invoked through WSL, which is where xorriso lives on that platform.
 
 official Veeam documentation: https://helpcenter.veeam.com/docs/vbr/userguide/deployment_linux_silent_deploy_configure.html?ver=13
 
@@ -217,13 +218,17 @@ Run the script (JSON-only mode -- this is the only supported invocation):
 .NOTES
 File Name      : autodeploy.ps1
 Author         : Baptiste TELLIER
-Prerequisite   : PowerShell 7+, WSL with xorriso installed
+Prerequisite   : PowerShell 7+ and xorriso (via WSL on Windows; native on macOS/Linux)
 Version        : 2.7
 Creation Date  : 24/09/2025
 Last Modified  : 26/11/2025
 
 REQUIREMENTS:
-- Windows Subsystem for Linux (WSL) with xorriso package installed
+- xorriso:
+    Windows      : WSL with the xorriso package installed
+    macOS        : brew update && brew install xorriso
+    Ubuntu/Debian: sudo apt-get update && sudo apt-get install -y xorriso
+    RHEL/Rocky   : sudo dnf install -y xorriso
 - Source ISO file must be in the same directory as this script
 - Optional: JSON configuration file for simplified parameter management
 - Optional: 'license' folder with .lic files for license automation

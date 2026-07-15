@@ -2,7 +2,7 @@
 
 [![PowerShell](https://img.shields.io/badge/PowerShell-7%2B-blue.svg)](https://docs.microsoft.com/en-us/powershell/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Platform](https://img.shields.io/badge/Platform-Windows%2BWSL-lightgrey.svg)](https://docs.microsoft.com/en-us/windows/wsl/)
+[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)](#prerequisites)
 [![Veeam](https://img.shields.io/badge/Veeam-v13.0-00B336.svg)](https://www.veeam.com/)
 
 > 🚀 **Enterprise-grade PowerShell automation tool for customizing Veeam Software Appliance ISO files.**
@@ -94,29 +94,35 @@ https://www.veeam.com/kb4772
 ## Prerequisites
 
 ### System Requirements
-- **Operating System**: Windows 10/11 or Windows Server 2016+
+- **Operating System**: one of
+    - Windows 10/11 or Windows Server 2016+, with WSL (Ubuntu/Debian recommended)
+    - macOS
+    - Linux (Ubuntu/Debian, or RHEL/Rocky/Alma)
 - **PowerShell**: Version 7 or higher
-- **WSL**: Windows Subsystem for Linux (Ubuntu/Debian recommended)
 - **Memory**: Minimum 4GB RAM (8GB recommended for large ISOs)
 - **Storage**: At least 14GB free space for ISO manipulation
 
 ### Software Dependencies
-**Software dependencies:**
-- `xorriso` installed in WSL
-    ```
-    sudo apt-get update
-    sudo apt-get install xorriso
-    ```
-- For RHEL/CentOS/Rocky:
-    ```
-    sudo yum install xorriso
-    ```
+
+`xorriso` is the only external dependency. On Windows it runs inside WSL; on macOS and Linux
+the script calls it directly.
+
+| Platform | Install command |
+|---|---|
+| Windows (in WSL) | `wsl sudo apt-get update && wsl sudo apt-get install -y xorriso` |
+| macOS | `brew update && brew install xorriso` |
+| Ubuntu/Debian | `sudo apt-get update && sudo apt-get install -y xorriso` |
+| RHEL/Rocky/Alma | `sudo dnf install -y xorriso` |
 
 **PowerShell configuration:**
 - Run with an appropriate execution policy
-- Confirm WSL is accessible:
+- Confirm your setup:
     ```
+    # Windows: check WSL is accessible
     wsl --version
+
+    # macOS / Linux: check xorriso is on your PATH
+    xorriso -version
     ```
 
 ### Optionnal Dependencies
@@ -367,17 +373,27 @@ Process completed successfully
 ## Troubleshooting
 
 ### Making ISO
+
+**On Windows (WSL):**
 - If you just installed WSL, you need to reboot
 - Ensure WSL is installed and available (`wsl --list --verbose`)
 - Install `xorriso` in WSL (`sudo apt-get install xorriso`) or update it
 - If you just installed WSL, you might have permission issue, reboot Windows
+
+**On macOS / Linux:**
+- Ensure `xorriso` is on your PATH (`xorriso -version`). If it is missing, the script prints the
+  install command for your platform and exits.
+
+**All platforms:**
 - Confirm ISO file is located in the same directory as the script
 - Use correct JSON structure with all parameters
 - All parameters MUST be defined in the JSON file. Since v2.7 the only CLI argument the script accepts is `-ConfigFile`; any other CLI argument is rejected by PowerShell as unknown.
 - If you use optionnal features: check prerequisite and folder structure
 - Use `$CFGOnly=true` to verify your kickstart file contain all Configurations Blocks
 - Check log file `ISO_Customization.log` for timestamped error messages
-- to browse ISO with WSL xorriso `wsl xorriso -indev "VeeamSoftwareAppliance_13.0.0.4967_20250822.iso" -ls /`
+- to browse the ISO contents:
+    - Windows: `wsl xorriso -indev "VeeamSoftwareAppliance_13.0.0.4967_20250822.iso" -ls /`
+    - macOS/Linux: `xorriso -indev "VeeamSoftwareAppliance_13.0.0.4967_20250822.iso" -ls /`
 
 ### Booting ISO
 - If your specified answers do not meet these requirements, the configuration process will fail. To troubleshoot errors, you can use the Live OS ISO to view the `/var/log/VeeamBackup/veeam_hostmanager/veeamhostmanager.log` file and the system logs files in the `/var/log/anaconda directory.`
@@ -396,7 +412,8 @@ Process completed successfully
 #### ISO File Access
 - **File Locks**: Ensure ISO files aren't mounted or locked by other applications
 - **Permissions**: Verify read/write access to ISO file location
-- **Path Format**: don't use path, put ISO in the same directory to avoid issue with WSL
+- **Path Format**: don't use paths, put the ISO in the same directory as the script. On Windows
+  this avoids WSL path-translation issues; on all platforms it keeps filenames portable.
 
 ---
 
