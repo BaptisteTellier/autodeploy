@@ -705,12 +705,12 @@ function Invoke-ISOExtractConfig {
     )
 
     $extractCommands = @(
-        "wsl xorriso -boot_image any keep -dev `"$TargetISO`" -osirrox on -extract $KickstartName $KickstartName",
-        "wsl xorriso -boot_image any keep -dev `"$TargetISO`" -osirrox on -extract /EFI/BOOT/grub.cfg grub.cfg"
+        @('-boot_image', 'any', 'keep', '-dev', $TargetISO, '-osirrox', 'on', '-extract', $KickstartName, $KickstartName),
+        @('-boot_image', 'any', 'keep', '-dev', $TargetISO, '-osirrox', 'on', '-extract', '/EFI/BOOT/grub.cfg', 'grub.cfg')
     )
 
-    foreach ($cmd in $extractCommands) {
-        if (-not (Invoke-WSLCommand -Command $cmd -Description "Extract configuration files")) {
+    foreach ($cmdArgs in $extractCommands) {
+        if (-not (Invoke-Xorriso -Arguments $cmdArgs -Description "Extract configuration files")) {
             throw "Failed to extract files from ISO"
         }
     }
@@ -732,14 +732,14 @@ function Invoke-ISOCommit {
     Write-Log "Committing changes to ISO..." 'Info'
 
     $commitCommands = @(
-        "wsl xorriso -boot_image any keep -dev `"$TargetISO`" -rm $KickstartName",
-        "wsl xorriso -boot_image any keep -dev `"$TargetISO`" -map $KickstartName $KickstartName",
-        "wsl xorriso -boot_image any keep -dev `"$TargetISO`" -rm /EFI/BOOT/grub.cfg",
-        "wsl xorriso -boot_image any keep -dev `"$TargetISO`" -map grub.cfg /EFI/BOOT/grub.cfg"
+        @('-boot_image', 'any', 'keep', '-dev', $TargetISO, '-rm', $KickstartName),
+        @('-boot_image', 'any', 'keep', '-dev', $TargetISO, '-map', $KickstartName, $KickstartName),
+        @('-boot_image', 'any', 'keep', '-dev', $TargetISO, '-rm', '/EFI/BOOT/grub.cfg'),
+        @('-boot_image', 'any', 'keep', '-dev', $TargetISO, '-map', 'grub.cfg', '/EFI/BOOT/grub.cfg')
     )
 
-    foreach ($cmd in $commitCommands) {
-        if (-not (Invoke-WSLCommand -Command $cmd -Description "Commit changes to ISO")) {
+    foreach ($cmdArgs in $commitCommands) {
+        if (-not (Invoke-Xorriso -Arguments $cmdArgs -Description "Commit changes to ISO")) {
             throw "Failed to commit changes to ISO"
         }
     }
@@ -765,8 +765,8 @@ function Add-FolderToISO {
     )
 
     if (-not (Test-Path $LocalPath)) { return }
-    $cmd = "wsl xorriso -boot_image any keep -dev `"$TargetISO`" -map $LocalPath $ISOPath"
-    Invoke-WSLCommand -Command $cmd -Description "Add $LocalPath folder to ISO" | Out-Null
+    $cmdArgs = @('-boot_image', 'any', 'keep', '-dev', $TargetISO, '-map', $LocalPath, $ISOPath)
+    Invoke-Xorriso -Arguments $cmdArgs -Description "Add $LocalPath folder to ISO" | Out-Null
 }
 
 #endregion
