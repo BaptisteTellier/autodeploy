@@ -512,19 +512,36 @@ function Resolve-XorrisoInvoker {
     Write-Log "xorriso invoker: $script:XorrisoCommand $($script:XorrisoArgPrefix -join ' ')" 'Info'
 }
 
-function Invoke-WSLCommand {
+function Invoke-Xorriso {
+    <#
+    .SYNOPSIS
+        Runs an xorriso command on any supported platform.
+    .DESCRIPTION
+        Takes arguments as an array and invokes the binary directly, so no
+        shell parses the command line. This is what allows paths containing
+        spaces to survive, and it removes the previous dependency on cmd.exe.
+
+        Requires Resolve-XorrisoInvoker to have run first.
+    #>
     param(
         [Parameter(Mandatory = $true)]
-        [string]$Command,
+        [string[]]$Arguments,
         [Parameter(Mandatory = $false)]
-        [string]$Description = "WSL Command"
+        [string]$Description = "xorriso command"
     )
 
-    try {
-        Write-Log "Executing: $Description" 'Info'
-        Write-Log "Command: $Command" 'Info'
+    if ([string]::IsNullOrWhiteSpace($script:XorrisoCommand)) {
+        Write-Log "Invoke-Xorriso called before Resolve-XorrisoInvoker" 'Error'
+        return $false
+    }
 
-        $output = & cmd /c $Command 2>&1
+    try {
+        $allArgs = @($script:XorrisoArgPrefix) + $Arguments
+
+        Write-Log "Executing: $Description" 'Info'
+        Write-Log "Command: $script:XorrisoCommand $($allArgs -join ' ')" 'Info'
+
+        $output = & $script:XorrisoCommand @allArgs 2>&1
         $exitCode = $LASTEXITCODE
 
         if ($exitCode -ne 0) {
