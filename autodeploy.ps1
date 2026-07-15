@@ -398,32 +398,88 @@ function Update-ParametersFromJSON {
 
 #region Helper Functions
 
+function Get-XorrisoInstallHint {
+    <#
+    .SYNOPSIS
+        Returns a runnable command that installs xorriso on this platform.
+    .DESCRIPTION
+        Reads ID and ID_LIKE from /etc/os-release. ID_LIKE is what maps
+        derivatives onto their parent's package manager - Rocky/Alma/CentOS
+        to dnf, Mint/Pop to apt-get - without enumerating every distro.
+
+        Returns the command as text. The caller prints it; the script never
+        runs a package manager itself.
+    #>
+    param(
+        [string]$OsReleasePath = '/etc/os-release',
+        [bool]$MacOSPlatform = $IsMacOS
+    )
+
+    $generic = "xorriso not found on PATH. Install it with your distribution's package manager."
+
+    if ($MacOSPlatform) {
+        return 'brew update && brew install xorriso'
+    }
+
+    if (-not (Test-Path $OsReleasePath)) {
+        return $generic
+    }
+
+    # Match ID= and ID_LIKE=, tolerating optional surrounding quotes.
+    $osRelease = Get-Content $OsReleasePath -Raw
+    $id     = if ($osRelease -match '(?m)^ID="?([^"\r\n]*)"?')      { $Matches[1] } else { '' }
+    $idLike = if ($osRelease -match '(?m)^ID_LIKE="?([^"\r\n]*)"?') { $Matches[1] } else { '' }
+    $family = "$id $idLike"
+
+    if ($family -match '(?i)\b(debian|ubuntu)\b') {
+        return 'sudo apt-get update && sudo apt-get install -y xorriso'
+    }
+    if ($family -match '(?i)\b(rhel|fedora|centos)\b') {
+        return 'sudo dnf install -y xorriso'
+    }
+
+    return $generic
+}
+
 function Test-Prerequisites {
     Write-Log "Testing prerequisites..." 'Info'
 
-    try {
-        $wslTest = & wsl echo "test" 2>$null
-        if ($wslTest -ne "test") {
-            throw "WSL is not available or not responding correctly"
+    if ($IsWindows) {
+        # Windows has no native xorriso - it runs inside WSL.
+        try {
+            $wslTest = & wsl echo "test" 2>$null
+            if ($wslTest -ne "test") {
+                throw "WSL is not available or not responding correctly"
+            }
+            Write-Log "WSL is available" 'Info'
         }
-        Write-Log "WSL is available" 'Info'
-    }
-    catch {
-        Write-Log "WSL test failed: $($_.Exception.Message)" 'Error'
-        return $false
-    }
+        catch {
+            Write-Log "WSL test failed: $($_.Exception.Message)" 'Error'
+            return $false
+        }
 
-    try {
-        $xorrisoTest = & wsl which xorriso 2>$null
-        if ([string]::IsNullOrWhiteSpace($xorrisoTest)) {
-            throw "xorriso not found. Install with: wsl sudo apt-get install xorriso"
+        try {
+            $xorrisoTest = & wsl which xorriso 2>$null
+            if ([string]::IsNullOrWhiteSpace($xorrisoTest)) {
+                throw "xorriso not found. Install with: wsl sudo apt-get install xorriso"
+            }
+            Write-Log "xorriso is available at: $xorrisoTest" 'Info'
         }
-        Write-Log "xorriso is available at: $xorrisoTest" 'Info'
+        catch {
+            Write-Log "xorriso test failed: $($_.Exception.Message)" 'Error'
+            Write-Log "Please install xorriso: wsl sudo apt-get update && wsl sudo apt-get install xorriso" 'Error'
+            return $false
+        }
     }
-    catch {
-        Write-Log "xorriso test failed: $($_.Exception.Message)" 'Error'
-        Write-Log "Please install xorriso: wsl sudo apt-get update && wsl sudo apt-get install xorriso" 'Error'
-        return $false
+    else {
+        # macOS and Linux call xorriso directly.
+        $xorrisoCmd = Get-Command xorriso -ErrorAction SilentlyContinue
+        if (-not $xorrisoCmd) {
+            Write-Log "xorriso not found on PATH" 'Error'
+            Write-Log "Install it with: $(Get-XorrisoInstallHint)" 'Error'
+            return $false
+        }
+        Write-Log "xorriso is available at: $($xorrisoCmd.Source)" 'Info'
     }
 
     if (-not (Test-Path $SourceISO)) {
@@ -1745,6 +1801,10 @@ try {
     }
 
     Write-Log "Selected Appliance Type: $ApplianceType" 'Info'
+
+    # Decide how xorriso is launched on this platform before any workflow
+    # calls Invoke-Xorriso. Every appliance type passes through here.
+    Resolve-XorrisoInvoker
 
     switch ($ApplianceType) {
         "VSA" {
