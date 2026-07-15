@@ -766,8 +766,8 @@ function Invoke-ISOExtractConfig {
     )
 
     $extractCommands = @(
-        @('-boot_image', 'any', 'keep', '-dev', $TargetISO, '-osirrox', 'on', '-extract', $KickstartName, $KickstartName),
-        @('-boot_image', 'any', 'keep', '-dev', $TargetISO, '-osirrox', 'on', '-extract', '/EFI/BOOT/grub.cfg', 'grub.cfg')
+        @('-dev', $TargetISO, '-boot_image', 'any', 'replay', '-osirrox', 'on', '-extract', $KickstartName, $KickstartName),
+        @('-dev', $TargetISO, '-boot_image', 'any', 'replay', '-osirrox', 'on', '-extract', '/EFI/BOOT/grub.cfg', 'grub.cfg')
     )
 
     foreach ($cmdArgs in $extractCommands) {
@@ -792,11 +792,14 @@ function Invoke-ISOCommit {
 
     Write-Log "Committing changes to ISO..." 'Info'
 
+    # -dev must precede -boot_image: 'replay' needs the image already loaded.
+    # 'replay' rather than 'keep' - keep drops the isohybrid MBR flag and the
+    # isolinux boot-info-table, which breaks booting from a dd'd USB stick.
     $commitCommands = @(
-        @('-boot_image', 'any', 'keep', '-dev', $TargetISO, '-rm', $KickstartName),
-        @('-boot_image', 'any', 'keep', '-dev', $TargetISO, '-map', $KickstartName, $KickstartName),
-        @('-boot_image', 'any', 'keep', '-dev', $TargetISO, '-rm', '/EFI/BOOT/grub.cfg'),
-        @('-boot_image', 'any', 'keep', '-dev', $TargetISO, '-map', 'grub.cfg', '/EFI/BOOT/grub.cfg')
+        @('-dev', $TargetISO, '-boot_image', 'any', 'replay', '-rm', $KickstartName),
+        @('-dev', $TargetISO, '-boot_image', 'any', 'replay', '-map', $KickstartName, $KickstartName),
+        @('-dev', $TargetISO, '-boot_image', 'any', 'replay', '-rm', '/EFI/BOOT/grub.cfg'),
+        @('-dev', $TargetISO, '-boot_image', 'any', 'replay', '-map', 'grub.cfg', '/EFI/BOOT/grub.cfg')
     )
 
     foreach ($cmdArgs in $commitCommands) {
@@ -826,7 +829,7 @@ function Add-FolderToISO {
     )
 
     if (-not (Test-Path $LocalPath)) { return }
-    $cmdArgs = @('-boot_image', 'any', 'keep', '-dev', $TargetISO, '-map', $LocalPath, $ISOPath)
+    $cmdArgs = @('-dev', $TargetISO, '-boot_image', 'any', 'replay', '-map', $LocalPath, $ISOPath)
     Invoke-Xorriso -Arguments $cmdArgs -Description "Add $LocalPath folder to ISO" | Out-Null
 }
 
