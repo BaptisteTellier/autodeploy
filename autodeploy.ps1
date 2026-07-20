@@ -24,7 +24,7 @@ Enhanced Features:
 - APPLIANCE TYPE SELECTION: Support for VSA, VIA, VIAiscsi, and VIAHR appliances with dedicated deployment workflows
 - JSON CONFIGURATION SUPPORT: Load all parameters from JSON configuration files for easy deployment management
 - OUT-OF-PLACE ISO MODIFICATION: Creates customized copies without modifying the original ISO
-- PATH HANDLING: Works ONLY in the current directory to avoid WSL path issues
+- PATH HANDLING: Works ONLY in the current directory to keep paths portable across platforms
 - Network Configuration: Supports both DHCP and static IP configurations with comprehensive validation
 - Regional Settings: Configures keyboard layouts and timezone settings with proper validation
 - Veeam Configuration Management: Implements Veeam auto deploy 
@@ -32,7 +32,8 @@ Enhanced Features:
 - Service Provider Integration: Automated VCSP connection and management agent installation - v13.0.1 required
 - Enterprise Logging: Comprehensive logging system with timestamped Info/Warn/Error levels + output log file in current folder
 
-The script utilizes WSL (Windows Subsystem for Linux) with xorriso for ISO manipulation.
+The script uses xorriso for ISO manipulation. On macOS and Linux xorriso is called directly;
+on Windows it is invoked through WSL, which is where xorriso lives on that platform.
 
 official Veeam documentation: https://helpcenter.veeam.com/docs/vbr/userguide/deployment_linux_silent_deploy_configure.html?ver=13
 
@@ -256,13 +257,17 @@ Run the script (JSON-only mode -- this is the only supported invocation):
 .NOTES
 File Name      : autodeploy.ps1
 Author         : Baptiste TELLIER
-Prerequisite   : PowerShell 7+, WSL with xorriso installed
+Prerequisite   : PowerShell 7+ and xorriso (via WSL on Windows; native on macOS/Linux)
 Version        : 2.8
 Creation Date  : 24/09/2025
 Last Modified  : 26/11/2025
 
 REQUIREMENTS:
-- Windows Subsystem for Linux (WSL) with xorriso package installed
+- xorriso:
+    Windows      : WSL with the xorriso package installed
+    macOS        : brew update && brew install xorriso
+    Ubuntu/Debian: sudo apt-get update && sudo apt-get install -y xorriso
+    RHEL/Rocky   : sudo dnf install -y xorriso
 - Source ISO file must be in the same directory as this script
 - Optional: JSON configuration file for simplified parameter management
 - Optional: 'license' folder with .lic files for license automation
@@ -500,32 +505,88 @@ function Test-ParameterSafety {
 
 #region Helper Functions
 
+function Get-XorrisoInstallHint {
+    <#
+    .SYNOPSIS
+        Returns a runnable command that installs xorriso on this platform.
+    .DESCRIPTION
+        Reads ID and ID_LIKE from /etc/os-release. ID_LIKE is what maps
+        derivatives onto their parent's package manager - Rocky/Alma/CentOS
+        to dnf, Mint/Pop to apt-get - without enumerating every distro.
+
+        Returns the command as text. The caller prints it; the script never
+        runs a package manager itself.
+    #>
+    param(
+        [string]$OsReleasePath = '/etc/os-release',
+        [bool]$MacOSPlatform = $IsMacOS
+    )
+
+    $generic = "xorriso not found on PATH. Install it with your distribution's package manager."
+
+    if ($MacOSPlatform) {
+        return 'brew update && brew install xorriso'
+    }
+
+    if (-not (Test-Path $OsReleasePath)) {
+        return $generic
+    }
+
+    # Match ID= and ID_LIKE=, tolerating optional surrounding quotes.
+    $osRelease = Get-Content $OsReleasePath -Raw
+    $id     = if ($osRelease -match '(?m)^ID="?([^"\r\n]*)"?')      { $Matches[1] } else { '' }
+    $idLike = if ($osRelease -match '(?m)^ID_LIKE="?([^"\r\n]*)"?') { $Matches[1] } else { '' }
+    $family = "$id $idLike"
+
+    if ($family -match '(?i)\b(debian|ubuntu)\b') {
+        return 'sudo apt-get update && sudo apt-get install -y xorriso'
+    }
+    if ($family -match '(?i)\b(rhel|fedora|centos)\b') {
+        return 'sudo dnf install -y xorriso'
+    }
+
+    return $generic
+}
+
 function Test-Prerequisites {
     Write-Log "Testing prerequisites..." 'Info'
 
-    try {
-        $wslTest = & wsl echo "test" 2>$null
-        if ($wslTest -ne "test") {
-            throw "WSL is not available or not responding correctly"
+    if ($IsWindows) {
+        # Windows has no native xorriso - it runs inside WSL.
+        try {
+            $wslTest = & wsl echo "test" 2>$null
+            if ($wslTest -ne "test") {
+                throw "WSL is not available or not responding correctly"
+            }
+            Write-Log "WSL is available" 'Info'
         }
-        Write-Log "WSL is available" 'Info'
-    }
-    catch {
-        Write-Log "WSL test failed: $($_.Exception.Message)" 'Error'
-        return $false
-    }
+        catch {
+            Write-Log "WSL test failed: $($_.Exception.Message)" 'Error'
+            return $false
+        }
 
-    try {
-        $xorrisoTest = & wsl which xorriso 2>$null
-        if ([string]::IsNullOrWhiteSpace($xorrisoTest)) {
-            throw "xorriso not found. Install with: wsl sudo apt-get install xorriso"
+        try {
+            $xorrisoTest = & wsl which xorriso 2>$null
+            if ([string]::IsNullOrWhiteSpace($xorrisoTest)) {
+                throw "xorriso not found. Install with: wsl sudo apt-get install xorriso"
+            }
+            Write-Log "xorriso is available at: $xorrisoTest" 'Info'
         }
-        Write-Log "xorriso is available at: $xorrisoTest" 'Info'
+        catch {
+            Write-Log "xorriso test failed: $($_.Exception.Message)" 'Error'
+            Write-Log "Please install xorriso: wsl sudo apt-get update && wsl sudo apt-get install xorriso" 'Error'
+            return $false
+        }
     }
-    catch {
-        Write-Log "xorriso test failed: $($_.Exception.Message)" 'Error'
-        Write-Log "Please install xorriso: wsl sudo apt-get update && wsl sudo apt-get install xorriso" 'Error'
-        return $false
+    else {
+        # macOS and Linux call xorriso directly.
+        $xorrisoCmd = Get-Command xorriso -ErrorAction SilentlyContinue
+        if (-not $xorrisoCmd) {
+            Write-Log "xorriso not found on PATH" 'Error'
+            Write-Log "Install it with: $(Get-XorrisoInstallHint)" 'Error'
+            return $false
+        }
+        Write-Log "xorriso is available at: $($xorrisoCmd.Source)" 'Info'
     }
 
     if (-not (Test-Path $SourceISO)) {
@@ -585,19 +646,65 @@ function Initialize-ISOOperation {
     }
 }
 
-function Invoke-WSLCommand {
+function Resolve-XorrisoInvoker {
+    <#
+    .SYNOPSIS
+        Determines how to launch xorriso on the current platform.
+    .DESCRIPTION
+        Windows has no native xorriso, so it is invoked through WSL. macOS and
+        Linux call the binary directly. Called once at startup; every xorriso
+        call then goes through Invoke-Xorriso without knowing the platform.
+
+        WindowsPlatform is a parameter rather than a direct $IsWindows read so
+        both branches can be tested - $IsWindows is read-only and cannot be
+        mocked.
+    #>
     param(
-        [Parameter(Mandatory = $true)]
-        [string]$Command,
-        [Parameter(Mandatory = $false)]
-        [string]$Description = "WSL Command"
+        [bool]$WindowsPlatform = $IsWindows
     )
 
-    try {
-        Write-Log "Executing: $Description" 'Info'
-        Write-Log "Command: $Command" 'Info'
+    if ($WindowsPlatform) {
+        $script:XorrisoCommand   = 'wsl'
+        $script:XorrisoArgPrefix = @('xorriso')
+    }
+    else {
+        $script:XorrisoCommand   = 'xorriso'
+        $script:XorrisoArgPrefix = @()
+    }
 
-        $output = & cmd /c $Command 2>&1
+    Write-Log "xorriso invoker: $script:XorrisoCommand $($script:XorrisoArgPrefix -join ' ')" 'Info'
+}
+
+function Invoke-Xorriso {
+    <#
+    .SYNOPSIS
+        Runs an xorriso command on any supported platform.
+    .DESCRIPTION
+        Takes arguments as an array and invokes the binary directly, so no
+        shell parses the command line. This is what allows paths containing
+        spaces to survive, and it removes the previous dependency on cmd.exe.
+
+        Requires Resolve-XorrisoInvoker to have run first.
+    #>
+    param(
+        [Parameter(Mandatory = $true)]
+        [string[]]$Arguments,
+        [Parameter(Mandatory = $false)]
+        [string]$Description = "xorriso command"
+    )
+
+    if ([string]::IsNullOrWhiteSpace($script:XorrisoCommand)) {
+        Write-Log "Invoke-Xorriso called before Resolve-XorrisoInvoker" 'Error'
+        return $false
+    }
+
+    try {
+        $allArgs = @($script:XorrisoArgPrefix) + $Arguments
+
+        Write-Log "Executing: $Description" 'Info'
+        Write-Log "Command: $script:XorrisoCommand $($allArgs -join ' ')" 'Info'
+
+        $output = & $script:XorrisoCommand @allArgs 2>&1
         $exitCode = $LASTEXITCODE
 
         if ($exitCode -ne 0) {
@@ -767,12 +874,12 @@ function Invoke-ISOExtractConfig {
     )
 
     $extractCommands = @(
-        "wsl xorriso -boot_image any keep -dev `"$TargetISO`" -osirrox on -extract $KickstartName $KickstartName",
-        "wsl xorriso -boot_image any keep -dev `"$TargetISO`" -osirrox on -extract /EFI/BOOT/grub.cfg grub.cfg"
+        @('-dev', $TargetISO, '-boot_image', 'any', 'replay', '-osirrox', 'on', '-extract', $KickstartName, $KickstartName),
+        @('-dev', $TargetISO, '-boot_image', 'any', 'replay', '-osirrox', 'on', '-extract', '/EFI/BOOT/grub.cfg', 'grub.cfg')
     )
 
-    foreach ($cmd in $extractCommands) {
-        if (-not (Invoke-WSLCommand -Command $cmd -Description "Extract configuration files")) {
+    foreach ($cmdArgs in $extractCommands) {
+        if (-not (Invoke-Xorriso -Arguments $cmdArgs -Description "Extract configuration files")) {
             throw "Failed to extract files from ISO"
         }
     }
@@ -793,15 +900,18 @@ function Invoke-ISOCommit {
 
     Write-Log "Committing changes to ISO..." 'Info'
 
+    # -dev must precede -boot_image: 'replay' needs the image already loaded.
+    # 'replay' rather than 'keep' - keep drops the isohybrid MBR flag and the
+    # isolinux boot-info-table, which breaks booting from a dd'd USB stick.
     $commitCommands = @(
-        "wsl xorriso -boot_image any keep -dev `"$TargetISO`" -rm $KickstartName",
-        "wsl xorriso -boot_image any keep -dev `"$TargetISO`" -map $KickstartName $KickstartName",
-        "wsl xorriso -boot_image any keep -dev `"$TargetISO`" -rm /EFI/BOOT/grub.cfg",
-        "wsl xorriso -boot_image any keep -dev `"$TargetISO`" -map grub.cfg /EFI/BOOT/grub.cfg"
+        @('-dev', $TargetISO, '-boot_image', 'any', 'replay', '-rm', $KickstartName),
+        @('-dev', $TargetISO, '-boot_image', 'any', 'replay', '-map', $KickstartName, $KickstartName),
+        @('-dev', $TargetISO, '-boot_image', 'any', 'replay', '-rm', '/EFI/BOOT/grub.cfg'),
+        @('-dev', $TargetISO, '-boot_image', 'any', 'replay', '-map', 'grub.cfg', '/EFI/BOOT/grub.cfg')
     )
 
-    foreach ($cmd in $commitCommands) {
-        if (-not (Invoke-WSLCommand -Command $cmd -Description "Commit changes to ISO")) {
+    foreach ($cmdArgs in $commitCommands) {
+        if (-not (Invoke-Xorriso -Arguments $cmdArgs -Description "Commit changes to ISO")) {
             throw "Failed to commit changes to ISO"
         }
     }
@@ -827,8 +937,8 @@ function Add-FolderToISO {
     )
 
     if (-not (Test-Path $LocalPath)) { return }
-    $cmd = "wsl xorriso -boot_image any keep -dev `"$TargetISO`" -map $LocalPath $ISOPath"
-    Invoke-WSLCommand -Command $cmd -Description "Add $LocalPath folder to ISO" | Out-Null
+    $cmdArgs = @('-dev', $TargetISO, '-boot_image', 'any', 'replay', '-map', $LocalPath, $ISOPath)
+    Invoke-Xorriso -Arguments $cmdArgs -Description "Add $LocalPath folder to ISO" | Out-Null
 }
 
 #endregion
@@ -1865,6 +1975,10 @@ try {
     }
 
     Write-Log "Selected Appliance Type: $ApplianceType" 'Info'
+
+    # Decide how xorriso is launched on this platform before any workflow
+    # calls Invoke-Xorriso. Every appliance type passes through here.
+    Resolve-XorrisoInvoker
 
     switch ($ApplianceType) {
         "VSA" {
