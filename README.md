@@ -18,6 +18,8 @@ This advanced PowerShell script automates the customization of Veeam Software Ap
 ---
 
 ## What's New (v2.8)
+- **Cross-platform (macOS / Linux natif)**: the script now runs natively on macOS and Linux (`xorriso` is called directly); Windows still uses WSL. Thanks @k00laidIT (PR #6).
+- **Boot record fix**: ISOs are written with `-boot_image any replay` (instead of `keep`), preserving the isohybrid MBR + boot-info-table so modified ISOs also boot from a `dd`'d USB stick (previously: virtual media only).
 - **Support for VSA 13.1**: 4 new JSON keys for the Host Manager init config (VSA workflow only). All default-off so v2.7 JSONs keep working as-is.
   - `ExternalManagersInstallationEnabled` (bool, default `false`) -> rendered as `externalManagersInstallation.enabled=true|false` in `/etc/veeam/vbr_init.cfg`
   - `ExternalManagersInstallationTimeout` (int seconds, default `3600` = 60 min) -> rendered as `externalManagersInstallation.timeout=<sec>`
@@ -47,6 +49,7 @@ This advanced PowerShell script automates the customization of Veeam Software Ap
 ## Features
 
 - Load configuration from JSON for reproducible deployments
+- Cross-platform: Windows (WSL), macOS, Linux
 - APPLIANCE TYPE SELECTION: Support for VSA, VIA, VIAiscsi, and VIAHR appliances with dedicated deployment workflows
 - Modify ISO files (create custom copies or modify in place)
 - Automated GRUB and Kickstart configuration injection
