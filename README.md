@@ -30,8 +30,8 @@ This advanced PowerShell script automates the customization of Veeam Software Ap
 - **NodeExporter is now VSA-only (BREAKING)**: `Set-VBRNodeExporterOptions` is a VBR cmdlet that does not exist on VIA/VIAiscsi/VIAHR appliances. Setting `NodeExporter=true` on those workflows now throws early (same pattern as `VCSPConnection`/`LicenseVBRTune`/`RestoreConfig`). VIA appliance node_exporter configuration will be piloted by the VSA in a future release.
 - **applianceRole.role auto-injection for VIA appliances**: VSA 13.1 replaces the GRUB-based role selection with a declarative line in `/etc/veeam/vbr_init.cfg`. The script now auto-emits this line based on `ApplianceType`: `VIA` -> `applianceRole.role=vbproxy`, `VIAiscsi` -> `applianceRole.role=vbproxy` + `applianceRole.iSCSI=true`, `VIAHR` -> `applianceRole.role=veeam-lhr`. VSA omits the line (it has a dedicated ISO).
 - **`ApplianceType=VIAVMware` renamed to `VIAiscsi`**: the iSCSI / NVMe-TCP proxy workflow is now identified as `VIAiscsi` in JSON. Update your JSON files accordingly. The new `viascsi.json` example file is provided.
-- **New JSON key `VIASingleDisk` (VIA-only)**: bool, default `false`. When `true`, the script selects the "Veeam Single Disk Appliance" GRUB menu entry as the boot default instead of the unified standard label. The Single Disk entry installs by wiping the entire available device (kernel passes `inst.vsingledisk`). Applies to `VIA`, `VIAiscsi`, `VIAHR` — throws on `VSA` (which has its own ISO without a Single Disk entry). The GRUB regex that injects `inst.assumeyes` was broadened so both the Standard and Single Disk kernel lines get the non-interactive flag.
-- **Unified GRUB default label for all three VIA workflows**: `VIA`, `VIAiscsi`, and `VIAHR` now all use `[TBD]Veeam Infrastructure Standart Appliance>Install - fresh install, wipes everything (including local backups)` as the standard GRUB default (overridden by `VIASingleDisk=true`).
+- **New JSON key `VIASingleDisk` (VIA-only)**: bool, default `false`. When `true`, the script selects the "Single-Disk Deployment" GRUB menu entry as the boot default instead of the standard "Standard (Multi-Disk) Deployment" label. The Single-Disk entry installs by wiping all devices (kernel passes `inst.vsingledisk`). Applies to `VIA`, `VIAiscsi`, `VIAHR` — throws on `VSA` (which has its own ISO without a Single-Disk entry). The GRUB regex that injects `inst.assumeyes` was broadened so both the Standard and Single-Disk kernel lines get the non-interactive flag.
+- **GRUB default labels (VSA 13.1)**: labels updated for the 13.1 release ISOs (no more `[TBD]` placeholders). VSA boots `Veeam Backup & Replication>Install …`; the three VIA workflows boot `Standard (Multi-Disk) Deployment>Install …` (or `Single-Disk Deployment>Install …` when `VIASingleDisk=true`).
 - **Publish to main pending VSA 13.1 release**: v2.8 will land on `main` once VSA 13.1 is officially released. Until then, all v2.8 work stays on the `dev` branch.
 
 ## What's New (v2.7)
@@ -274,7 +274,7 @@ the script calls it directly.
 
 | Parameter    | Type | Description                                                                                                                                                                  | Default |
 |--------------|------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|---------|
-| VIASingleDisk | Bool | Selects the "Veeam Single Disk Appliance" GRUB entry as the boot default (passes `inst.vsingledisk` — wipes the entire available device). Throws on VSA. | false |
+| VIASingleDisk | Bool | Selects the "Single-Disk Deployment" GRUB entry as the boot default (passes `inst.vsingledisk` — wipes all devices). Throws on VSA. | false |
 
 ---
 

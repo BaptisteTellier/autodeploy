@@ -242,12 +242,12 @@ Default: $false
 
 .PARAMETER VIASingleDisk
 VIA-only flag (applies to ApplianceType=VIA, VIAiscsi, VIAHR -- throws on VSA).
-When $true, the script selects the source ISO's existing "Veeam Single Disk Appliance"
+When $true, the script selects the source ISO's existing "Single-Disk Deployment"
 GRUB menu entry as the boot default, instead of the standard
-"[TBD]Veeam Infrastructure Standart Appliance" label shared by all three VIA workflows.
+"Standard (Multi-Disk) Deployment" label shared by all three VIA workflows.
 The script does NOT add any kernel flag itself -- it relies on that pre-existing menu
-entry (which already passes `inst.vsingledisk`, wiping the entire available device).
-Requires the source VIA ISO to ship the "Veeam Single Disk Appliance" GRUB menu entry.
+entry (which already passes `inst.vsingledisk`, wiping all devices).
+Requires the source VIA ISO to ship the "Single-Disk Deployment" GRUB menu entry.
 Default: $false
 
 .EXAMPLE
@@ -1548,7 +1548,7 @@ function Invoke-VSA {
 
     Write-Log "Configuring GRUB bootloader..." 'Info'
     Update-FileContent -FilePath "grub.cfg" -Pattern '^(.*inst.ks=hd:LABEL=VeeamSA:/vbr-ks.cfg quiet.*)$' -Replacement '${1} inst.assumeyes'
-    $newDefault = '"Veeam Backup & Replication v13.0>Install - fresh install, wipes everything (including local backups)"'
+    $newDefault = '"Veeam Backup & Replication>Install - fresh install, wipes everything (including local backups)"'
     Set-GrubDefaultAndTimeout -DefaultLabel $newDefault -Timeout $GrubTimeout
 
     #####
@@ -1706,9 +1706,9 @@ function Invoke-VIA {
     $pattern = "^(.*LABEL=VeeamJeOS:/$CFGname.*)$"
     Update-FileContent -FilePath "grub.cfg" -Pattern $pattern -Replacement '${1} inst.assumeyes'
     $newDefault = if ($VIASingleDisk) {
-        '"[TBD]Veeam Single Disk Appliance>[TBD]Install - fresh install, wipes everything on available device"'
+        '"Single-Disk Deployment>Install - fresh install, wipes everything on all devices"'
     } else {
-        '"[TBD]Veeam Infrastructure Standart Appliance>Install - fresh install, wipes everything (including local backups)"'
+        '"Standard (Multi-Disk) Deployment>Install - fresh install, wipes everything (including local backups)"'
     }
     Set-GrubDefaultAndTimeout -DefaultLabel $newDefault -Timeout $GrubTimeout
 
@@ -1807,9 +1807,9 @@ function Invoke-VIAiscsi {
     $pattern = "^(.*LABEL=VeeamJeOS:/$CFGname.*)$"
     Update-FileContent -FilePath "grub.cfg" -Pattern $pattern -Replacement '${1} inst.assumeyes'
     $newDefault = if ($VIASingleDisk) {
-        '"[TBD]Veeam Single Disk Appliance>[TBD]Install - fresh install, wipes everything on available device"'
+        '"Single-Disk Deployment>Install - fresh install, wipes everything on all devices"'
     } else {
-        '"[TBD]Veeam Infrastructure Standart Appliance>Install - fresh install, wipes everything (including local backups)"'
+        '"Standard (Multi-Disk) Deployment>Install - fresh install, wipes everything (including local backups)"'
     }
     Set-GrubDefaultAndTimeout -DefaultLabel $newDefault -Timeout $GrubTimeout
 
@@ -1908,9 +1908,9 @@ function Invoke-VIAHR {
     $pattern = "^(.*LABEL=VeeamJeOS:/$CFGname.*)$"
     Update-FileContent -FilePath "grub.cfg" -Pattern $pattern -Replacement '${1} inst.assumeyes'
     $newDefault = if ($VIASingleDisk) {
-        '"[TBD]Veeam Single Disk Appliance>[TBD]Install - fresh install, wipes everything on available device"'
+        '"Single-Disk Deployment>Install - fresh install, wipes everything on all devices"'
     } else {
-        '"[TBD]Veeam Infrastructure Standart Appliance>Install - fresh install, wipes everything (including local backups)"'
+        '"Standard (Multi-Disk) Deployment>Install - fresh install, wipes everything (including local backups)"'
     }
     Set-GrubDefaultAndTimeout -DefaultLabel $newDefault -Timeout $GrubTimeout
 
