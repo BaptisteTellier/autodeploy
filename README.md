@@ -18,6 +18,7 @@ This advanced PowerShell script automates the customization of Veeam Software Ap
 ---
 
 ## What's New (v2.8)
+- **breaking change** this version works only with 13.1 build
 - **Cross-platform (macOS / Linux natif)**: the script now runs natively on macOS and Linux (`xorriso` is called directly); Windows still uses WSL. Thanks @k00laidIT (PR #6).
 - **Boot record fix**: ISOs are written with `-boot_image any replay` (instead of `keep`), preserving the isohybrid MBR + boot-info-table so modified ISOs also boot from a `dd`'d USB stick (previously: virtual media only).
 - **Support for VSA 13.1**: 4 new JSON keys for the Host Manager init config (VSA workflow only). All default-off so v2.7 JSONs keep working as-is.
