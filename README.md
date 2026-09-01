@@ -11,16 +11,16 @@
 
 This advanced PowerShell script automates the customization of Veeam Software Appliance ISO files, enabling fully automated, unattended appliance deployments with enterprise-grade, reusable configurations. It supports JSON configuration loading, out-of-place ISO modification, advanced logging, and optional IS backup creation. Network, security, and monitoring details can be configured to fit enterprise environments.
 
-- Tested on build 13.0.0.4967_20250822 & 13.0.1.180_20251101 & 13.0.1.2067_20260310 & 13.1
+- Tested on build 13.0.0.4967_20250822 & 13.0.1.180_20251101 & 13.0.1.2067_20260310 & 13.1.0.411
 - For Auto-Deployment PowerShell exemple : [Powershell Folder](https://github.com/BaptisteTellier/autodeploy/tree/main/powershell)
 - For Packer remote kickstart exemple : [Packer Folder](https://github.com/BaptisteTellier/autodeploy/tree/main/packer)
-- Youtube video - French audi with Eng Sub : [Part 1](https://www.youtube.com/watch?v=Ri877QyX6i8) [Part 2](https://www.youtube.com/watch?v=fIvcHSPhUUM) [Part 3](https://www.youtube.com/watch?v=MwQcrLufKDU) [Part 4](https://www.youtube.com/watch?v=O56TzfvDNT0) [Part 5](https://www.youtube.com/watch?v=-LA9wKzujyA)
+- Youtube video - French audi with Eng Sub : [Part 1](https://www.youtube.com/watch?v=Ri877QyX6i8) [Part 2](https://www.youtube.com/watch?v=fIvcHSPhUUM) [Part 3](https://www.youtube.com/watch?v=MwQcrLufKDU) [Part 4](https://www.youtube.com/watch?v=O56TzfvDNT0) [Part 5](https://www.youtube.com/watch?v=-LA9wKzujyA) 
 ---
 
 ## What's New (v2.8)
-- **breaking change** this version works only with 13.1 build
+- **Breaking change** this version works only with 13.1 build
 - **Cross-platform (macOS / Linux natif)**: the script now runs natively on macOS and Linux (`xorriso` is called directly); Windows still uses WSL. Thanks @k00laidIT (PR #6).
-- **Boot record fix**: ISOs are written with `-boot_image any replay` (instead of `keep`), preserving the isohybrid MBR + boot-info-table so modified ISOs also boot from a `dd`'d USB stick (previously: virtual media only).
+- **Boot record fix**: ISOs are written with `-boot_image any replay` (instead of `keep`), preserving the isohybrid MBR + boot-info-table so modified ISOs also boot from a `dd`'d USB stick (previously: virtual media only). Thanks @k00laidIT (PR #6)
 - **Support for VSA 13.1**: 4 new JSON keys for the Host Manager init config (VSA workflow only). All default-off so v2.7 JSONs keep working as-is.
   - `ExternalManagersInstallationEnabled` (bool, default `false`) -> rendered as `externalManagersInstallation.enabled=true|false` in `/etc/veeam/vbr_init.cfg`
   - `ExternalManagersInstallationTimeout` (int seconds, default `3600` = 60 min) -> rendered as `externalManagersInstallation.timeout=<sec>`
@@ -32,8 +32,6 @@ This advanced PowerShell script automates the customization of Veeam Software Ap
 - **applianceRole.role auto-injection for VIA appliances**: VSA 13.1 replaces the GRUB-based role selection with a declarative line in `/etc/veeam/vbr_init.cfg`. The script now auto-emits this line based on `ApplianceType`: `VIA` -> `applianceRole.role=vbproxy`, `VIAiscsi` -> `applianceRole.role=vbproxy` + `applianceRole.iSCSI=true`, `VIAHR` -> `applianceRole.role=veeam-lhr`. VSA omits the line (it has a dedicated ISO).
 - **`ApplianceType=VIAVMware` renamed to `VIAiscsi`**: the iSCSI / NVMe-TCP proxy workflow is now identified as `VIAiscsi` in JSON. Update your JSON files accordingly. The new `viascsi.json` example file is provided.
 - **New JSON key `VIASingleDisk` (VIA-only)**: bool, default `false`. When `true`, the script selects the "Single-Disk Deployment" GRUB menu entry as the boot default instead of the standard "Standard (Multi-Disk) Deployment" label. The Single-Disk entry installs by wiping all devices (kernel passes `inst.vsingledisk`). Applies to `VIA`, `VIAiscsi`, `VIAHR` — throws on `VSA` (which has its own ISO without a Single-Disk entry). The GRUB regex that injects `inst.assumeyes` was broadened so both the Standard and Single-Disk kernel lines get the non-interactive flag.
-- **GRUB default labels (VSA 13.1)**: labels updated for the 13.1 release ISOs (no more `[TBD]` placeholders). VSA boots `Veeam Backup & Replication>Install …`; the three VIA workflows boot `Standard (Multi-Disk) Deployment>Install …` (or `Single-Disk Deployment>Install …` when `VIASingleDisk=true`).
-- **Publish to main pending VSA 13.1 release**: v2.8 will land on `main` once VSA 13.1 is officially released. Until then, all v2.8 work stays on the `dev` branch.
 
 ## What's New (v2.7)
 - **JSON-only mode (BREAKING)**: `-ConfigFile` is now the only CLI argument; all other settings MUST come from the JSON file. CLI overrides are no longer supported.
