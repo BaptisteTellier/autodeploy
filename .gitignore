@@ -1,0 +1,41 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Generated kickstart files — CONTAIN CLEARTEXT SECRETS
+# ─────────────────────────────────────────────────────────────────────────────
+# autodeploy.ps1 extracts these into its working directory, edits them, and
+# leaves them behind whenever CleanupCFGFiles=false — which CFGOnly=true forces.
+# They carry veeamadmin.password, veeamso.password, both mfaSecretKey values and
+# veeamso.recoveryToken in cleartext. Never commit them.
+# Anchored to the repo root: conf/ and other tracked .cfg content is unaffected.
+/vbr-ks.cfg
+/proxy-ks.cfg
+/grub.cfg
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Run transcripts
+# ─────────────────────────────────────────────────────────────────────────────
+# Root-anchored on purpose: log/ holds two sample logs that are committed
+# deliberately as documentation.
+/ISO_Customization_*.log
+/HyperV-QA_*.log
+/VeeamDeploy_*.log
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ISO images — sources, working copies (_customized) and backups (_backup_*)
+# ─────────────────────────────────────────────────────────────────────────────
+*.iso
+
+# ─────────────────────────────────────────────────────────────────────────────
+# User-supplied inputs
+# ─────────────────────────────────────────────────────────────────────────────
+# Veeam licence files: LicenseVBRTune reads license/ from the working directory.
+/license/
+*.lic
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Editor / OS
+# ─────────────────────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
