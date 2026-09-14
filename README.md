@@ -17,6 +17,12 @@ This advanced PowerShell script automates the customization of Veeam Software Ap
 - Youtube video - French audi with Eng Sub : [Part 1](https://www.youtube.com/watch?v=Ri877QyX6i8) [Part 2](https://www.youtube.com/watch?v=fIvcHSPhUUM) [Part 3](https://www.youtube.com/watch?v=MwQcrLufKDU) [Part 4](https://www.youtube.com/watch?v=O56TzfvDNT0) [Part 5](https://www.youtube.com/watch?v=-LA9wKzujyA) 
 ---
 
+## What's New (v2.9)
+- **New JSON key `HostsEntries`** (array of strings, default `[]`): extra lines appended to `/etc/hosts` on the appliance, written in ordinary Linux hosts-file syntax (`<ip> <name> [alias...]`). Works on all appliance types. Comment lines (`# ...`) are passed through. A single entry may also be given as a bare string. Empty or absent leaves `/etc/hosts` exactly as the image ships it.
+  - Entries are **appended**, never replacing the file: the stock `127.0.0.1 localhost ...` and `::1 localhost ...` lines are preserved, since removing them breaks local name resolution on the appliance.
+  - The block is written early in the chroot `%post`, so `/etc/hosts` is in place before Veeam Host Manager configuration runs.
+- **Fix: `CFGOnly` no longer rewrites your source ISO.** Extraction used `-dev` (which acquires the drive read-write) together with `-boot_image any replay` (which marks the boot setup as a pending change), so xorriso committed a new session on exit. Because `CFGOnly` forces in-place mode with no working copy, every "CFG only" run appended ~2.5 MiB to the original ISO. Extraction now uses `-indev` (read-only) and drops the boot-image handling it never needed; `replay` stays in the commit step, which is the one that legitimately writes.
+
 ## What's New (v2.8)
 - **Breaking change** this version works only with 13.1 build
 - **Cross-platform (macOS / Linux natif)**: the script now runs natively on macOS and Linux (`xorriso` is called directly); Windows still uses WSL. Thanks @k00laidIT (PR #6).
@@ -162,6 +168,7 @@ the script calls it directly.
     "VeeamSoIsEnabled": "true",
     "NtpServer": ["time.nist.gov", "0.fr.pool.ntp.org"],
     "NtpRunSync": "true",
+    "HostsEntries": ["10.10.0.10   vbr01 vbr01.lab.local"],
     "ExternalManagersInstallationEnabled": false,
     "ExternalManagersInstallationTimeout": 3600,
     "HighAvailabilityEnabled": false,
@@ -248,6 +255,7 @@ the script calls it directly.
 | Parameter | Type   | Description                                              | Default |
 |-----------|--------|----------------------------------------------------------|---------|
 | Debug     | Bool   | Enable root SSH access during install. **Do not use in production.** | false |
+| HostsEntries | Array&lt;String&gt; | Extra lines appended to `/etc/hosts`, in Linux hosts-file syntax (`<ip> <name> [alias...]`). Comments (`# ...`) allowed. A bare string is accepted for a single entry. See [Custom /etc/hosts entries](#custom-etchosts-entries). | `[]` |
 
 #### VSA only
 
@@ -308,6 +316,52 @@ the script calls it directly.
 ---
 
 ## How Optional Feature works :
+
+### Custom /etc/hosts entries
+
+Available on **all** appliance types (VSA, VIA, VIAiscsi, VIAHR).
+
+Add the entries to your JSON in ordinary Linux hosts-file syntax:
+
+```json
+"HostsEntries": [
+  "10.10.0.10   vbr01 vbr01.lab.local",
+  "10.10.0.11   repo01 repo01.lab.local hardened",
+  "# managed by autodeploy",
+  "10.10.0.12   esxi01.lab.local"
+]
+```
+
+The appliance ships with this `/etc/hosts`:
+
+```
+127.0.0.1   localhost localhost.localdomain localhost4 localhost4.localdomain4
+::1         localhost localhost.localdomain localhost6 localhost6.localdomain6
+```
+
+and boots with this instead:
+
+```
+127.0.0.1   localhost localhost.localdomain localhost4 localhost4.localdomain4
+::1         localhost localhost.localdomain localhost6 localhost6.localdomain6
+
+# --- autodeploy: custom entries (begin) ---
+10.10.0.10   vbr01 vbr01.lab.local
+10.10.0.11   repo01 repo01.lab.local hardened
+# managed by autodeploy
+10.10.0.12   esxi01.lab.local
+# --- autodeploy: custom entries (end) ---
+```
+
+Notes:
+
+- **Entries are appended, never substituted.** The stock `localhost` / `::1` lines stay — a great deal of local software depends on them. There is deliberately no "replace the whole file" switch.
+- The marker comments make it obvious on a running appliance which lines came from autodeploy and which shipped with the image.
+- Written early in the chroot `%post`, so name resolution is available to everything that runs afterwards, including Veeam Host Manager configuration.
+- Entries are emitted inside a quoted heredoc, so they are written **literally** — a `$` or a backtick in an alias is not expanded while the kickstart runs as root.
+- Two inputs are rejected up front, because both would corrupt the generated kickstart: an entry containing a line break, and an entry that is exactly `EOF` (the heredoc terminator).
+- An entry that does not start with an IP address, or has an IP but no hostname, is **warned about and still written** — `/etc/hosts` accepts more shapes than is worth encoding as a rule, and the appliance simply ignores lines it cannot parse.
+- Setting it to `[]`, or leaving the key out, means `/etc/hosts` is not touched at all.
 
 ### Node_Exporter (VSA-only, 13.1+)
 - VSA 13.1+ has `node_exporter` built-in via Veeam Backup & Replication.

@@ -25,6 +25,7 @@
   "VeeamSoIsEnabled": "true",
   "NtpServer": "time.nist.gov",
   "NtpRunSync": "true",
+  "HostsEntries": [],
   "NodeExporter": true,
   "Debug": true
 }

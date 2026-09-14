@@ -12,7 +12,7 @@ Baptiste TELLIER
 .COPYRIGHT
 Copyright (c) 2025 Baptiste TELLIER
 
-.VERSION 2.8
+.VERSION 2.9
 
 .DESCRIPTION
 This PowerShell script provides automation for customizing Veeam Appliance ISO files to enable fully automated, unattended installations.
@@ -258,7 +258,7 @@ Run the script (JSON-only mode -- this is the only supported invocation):
 File Name      : autodeploy.ps1
 Author         : Baptiste TELLIER
 Prerequisite   : PowerShell 7+ and xorriso (via WSL on Windows; native on macOS/Linux)
-Version        : 2.8
+Version        : 2.9
 Creation Date  : 24/09/2025
 Last Modified  : 26/11/2025
 
@@ -366,7 +366,8 @@ $script:KnownParameters = @(
     'HighAvailabilityEnabled', 'HighAvailabilityTimeout',
     'NodeExporter', 'NodeExporterTLSEnabled', 'LicenseVBRTune', 'LicenseFile', 'SyslogServer',
     'VCSPConnection', 'VCSPUrl', 'VCSPLogin', 'VCSPPassword',
-    'RestoreConfig', 'ConfigPasswordSo', 'Debug', 'VIASingleDisk'
+    'RestoreConfig', 'ConfigPasswordSo', 'Debug', 'VIASingleDisk',
+    'HostsEntries'
 )
 
 function Set-DefaultParameter {
@@ -417,6 +418,9 @@ function Set-DefaultParameter {
         ConfigPasswordSo         = ""
         Debug                    = $false
         VIASingleDisk            = $false
+        # Extra lines appended to /etc/hosts on the appliance, in Linux hosts-file
+        # syntax ("<ip> <name> [alias...]"). Empty = the file is left untouched.
+        HostsEntries             = @()
     }
     foreach ($name in $defaults.Keys) {
         Set-Variable -Name $name -Value $defaults[$name] -Scope Script
@@ -450,6 +454,14 @@ function Update-ParametersFromJSON {
     # Backward-compat: NtpServer accepts either a string ("a") or an array (["a","b","c"]).
     # Normalize to array form so Get-VeeamHostConfigBlock can always use $NtpServer -join ';'.
     if ($script:NtpServer -isnot [array]) { $script:NtpServer = @($script:NtpServer) }
+
+    # Same treatment for HostsEntries: a single entry may be given as a bare string
+    # ("10.0.0.10 vbr01") instead of a one-element array.
+    if ($null -eq $script:HostsEntries) {
+        $script:HostsEntries = @()
+    } elseif ($script:HostsEntries -isnot [array]) {
+        $script:HostsEntries = @($script:HostsEntries)
+    }
 
     Write-Log "Applied $parametersUpdated parameters from JSON configuration" 'Info'
 }
@@ -498,7 +510,43 @@ function Test-ParameterSafety {
         }
     }
 
+    # HostsEntries is an array, so it is checked separately from the scalar table above.
+    # Each entry is emitted verbatim inside a quoted-'EOF' heredoc, which makes the
+    # content literal to bash -- $, backticks and ! are therefore harmless. Only two
+    # things can actually escape that context, and both corrupt the generated kickstart:
+    #   * an embedded CR/LF, which splits one entry into several /etc/hosts lines
+    #   * an entry that is itself the heredoc terminator, which closes it early and
+    #     spills the remaining entries into the %post script as commands
+    foreach ($entry in $script:HostsEntries) {
+        $line = [string]$entry
+        if ($line.IndexOfAny([char[]]"`r`n") -ge 0) {
+            throw "HostsEntries contains an entry with an embedded line break: '$line'. Each array element must be a single /etc/hosts line -- split it into separate elements."
+        }
+        if ($line.Trim() -eq 'EOF') {
+            throw "HostsEntries contains an entry equal to 'EOF'. That is the heredoc terminator used to write /etc/hosts in the kickstart, so it would truncate the block and execute the remaining entries as shell commands."
+        }
+    }
+
     Write-Log "Parameter safety validation passed" 'Info'
+}
+
+function Test-HostsEntryShape {
+    # Advisory only. /etc/hosts accepts more than is worth encoding as a grammar
+    # (comments, tabs, IPv6, arbitrary alias counts), so a malformed-looking entry
+    # is logged and kept rather than rejected -- the appliance simply ignores lines
+    # it cannot parse, and a hard error here would block legitimate exotic entries.
+    foreach ($entry in $script:HostsEntries) {
+        $line = ([string]$entry).Trim()
+        if ([string]::IsNullOrWhiteSpace($line) -or $line.StartsWith('#')) { continue }
+
+        $first = ($line -split '\s+')[0]
+        $parsed = [ipaddress]::None
+        if (-not [ipaddress]::TryParse($first, [ref]$parsed)) {
+            Write-Log "HostsEntries: '$line' does not start with an IP address -- /etc/hosts expects '<ip> <name> [alias...]'. Writing it anyway." 'Warn'
+        } elseif (($line -split '\s+').Count -lt 2) {
+            Write-Log "HostsEntries: '$line' has an IP but no hostname -- the appliance will ignore this line. Writing it anyway." 'Warn'
+        }
+    }
 }
 
 #endregion
@@ -757,6 +805,10 @@ function Get-ModificationSummary {
         $summary += "  IPv6: Disabled (--noipv6)"
     }
     $summary += "  NTP: $($NtpServer -join ', ')"
+    if ($HostsEntries.Count -gt 0) {
+        $summary += "  Custom /etc/hosts: $($HostsEntries.Count) entr$(if ($HostsEntries.Count -eq 1) {'y'} else {'ies'}) appended"
+        foreach ($entry in $HostsEntries) { $summary += "    $entry" }
+    }
 
     $summary += ""
     $summary += "OPTIONAL FEATURES:"
@@ -873,9 +925,17 @@ function Invoke-ISOExtractConfig {
         [Parameter(Mandatory)][string]$KickstartName
     )
 
+    # -indev, not -dev: -dev acquires the drive READ-WRITE, and '-boot_image any replay'
+    # marks the boot setup as a pending change, so xorriso commits a new session when it
+    # releases the drive -- rewriting the source ISO during what is only a read.
+    # That silently defeated CFGOnly, which forces InPlace with no working copy: a
+    # "CFG only" run appended ~2.5 MiB to the user's original ISO (verified by md5 on
+    # VeeamInfrastructureAppliance_13.1.1.18: 2704998400 -> 2707619840 bytes).
+    # Extraction needs no boot-image handling at all -- 'replay' belongs to Invoke-ISOCommit,
+    # which is the step that legitimately writes.
     $extractCommands = @(
-        @('-dev', $TargetISO, '-boot_image', 'any', 'replay', '-osirrox', 'on', '-extract', $KickstartName, $KickstartName),
-        @('-dev', $TargetISO, '-boot_image', 'any', 'replay', '-osirrox', 'on', '-extract', '/EFI/BOOT/grub.cfg', 'grub.cfg')
+        @('-indev', $TargetISO, '-osirrox', 'on', '-extract', $KickstartName, $KickstartName),
+        @('-indev', $TargetISO, '-osirrox', 'on', '-extract', '/EFI/BOOT/grub.cfg', 'grub.cfg')
     )
 
     foreach ($cmdArgs in $extractCommands) {
@@ -1269,6 +1329,33 @@ function Get-DisableIPv6PostBlock {
     )
 }
 
+function Get-HostsFileBlock {
+    # Appends the JSON's HostsEntries to /etc/hosts, inside the chroot %post so the
+    # path is the installed system's own /etc/hosts.
+    #
+    # Append (>>), never overwrite: the stock file carries the localhost / localhost4
+    # and ::1 / localhost6 entries that a great deal of local software depends on, and
+    # replacing it wholesale is a hard failure mode to diagnose on a booted appliance.
+    #
+    # Quoted 'EOF' terminator: entries are written literally, so an alias containing
+    # $ or a backtick cannot be expanded by bash while the kickstart runs as root.
+    # Test-ParameterSafety has already rejected the only two inputs that could break
+    # out of this heredoc (embedded newlines, and a bare 'EOF' entry).
+    #
+    # The marker comments make it obvious on a running appliance which lines came from
+    # autodeploy and which shipped with the image.
+    return @(
+        "log 'starting custom /etc/hosts entries'",
+        "cat << 'EOF' >> /etc/hosts",
+        "",
+        "# --- autodeploy: custom entries (begin) ---"
+    ) + [string[]]$HostsEntries + @(
+        "# --- autodeploy: custom entries (end) ---",
+        "EOF",
+        "log 'custom /etc/hosts entries added ($($HostsEntries.Count))'"
+    )
+}
+
 function Get-VeeamHostConfigBlock {
     # v2.8 (VSA 13.1 only): externalManagersInstallation + highAvailability config lines.
     # These options are managed by Veeam Host Manager and only apply to VSA.
@@ -1567,6 +1654,18 @@ function Invoke-VSA {
 
     Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine "mkdir -p /var/log/veeam/" -NewLines @("touch /etc/veeam/cockpit_auto_test_disable_init")
 
+    # Custom /etc/hosts entries (all appliance types). Anchored on the same early line
+    # as the cockpit touch above: this lands inside the chroot %post right after log()
+    # is defined, so /etc/hosts is in place before Veeam Host Manager configuration
+    # runs further down -- anything in that later block that resolves a name benefits.
+    # Note Add-ContentAfterLine inserts immediately after the anchor, so this block ends
+    # up just ABOVE the cockpit touch line injected by the call above. Order is
+    # irrelevant here; both are independent one-shot writes.
+    if ($HostsEntries.Count -gt 0) {
+        Write-Log "Adding $($HostsEntries.Count) custom /etc/hosts entr$(if ($HostsEntries.Count -eq 1) {'y'} else {'ies'})..." 'Info'
+        Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine "mkdir -p /var/log/veeam/" -NewLines (Get-HostsFileBlock)
+    }
+
     Add-ContentAfterLine -FilePath "vbr-ks.cfg" -TargetLine 'find /etc/yum.repos.d/ -type f -not -name "*veeam*" -delete' -NewLines (Get-VeeamHostConfigBlock)
  
     #####
@@ -1724,6 +1823,18 @@ function Invoke-VIA {
 
     Add-ContentAfterLine -FilePath "$CFGname" -TargetLine "mkdir -p /var/log/veeam/" -NewLines @("touch /etc/veeam/cockpit_auto_test_disable_init")
 
+    # Custom /etc/hosts entries (all appliance types). Anchored on the same early line
+    # as the cockpit touch above: this lands inside the chroot %post right after log()
+    # is defined, so /etc/hosts is in place before Veeam Host Manager configuration
+    # runs further down -- anything in that later block that resolves a name benefits.
+    # Note Add-ContentAfterLine inserts immediately after the anchor, so this block ends
+    # up just ABOVE the cockpit touch line injected by the call above. Order is
+    # irrelevant here; both are independent one-shot writes.
+    if ($HostsEntries.Count -gt 0) {
+        Write-Log "Adding $($HostsEntries.Count) custom /etc/hosts entr$(if ($HostsEntries.Count -eq 1) {'y'} else {'ies'})..." 'Info'
+        Add-ContentAfterLine -FilePath "$CFGname" -TargetLine "mkdir -p /var/log/veeam/" -NewLines (Get-HostsFileBlock)
+    }
+
     Add-ContentAfterLine -FilePath "$CFGname" -TargetLine 'find /etc/yum.repos.d/ -type f -not -name "*veeam*" -delete' -NewLines (Get-VeeamHostConfigBlock)
     #####
     #Optional Modifications 
@@ -1824,6 +1935,18 @@ function Invoke-VIAiscsi {
     }
 
     Add-ContentAfterLine -FilePath "$CFGname" -TargetLine "mkdir -p /var/log/veeam/" -NewLines @("touch /etc/veeam/cockpit_auto_test_disable_init")
+
+    # Custom /etc/hosts entries (all appliance types). Anchored on the same early line
+    # as the cockpit touch above: this lands inside the chroot %post right after log()
+    # is defined, so /etc/hosts is in place before Veeam Host Manager configuration
+    # runs further down -- anything in that later block that resolves a name benefits.
+    # Note Add-ContentAfterLine inserts immediately after the anchor, so this block ends
+    # up just ABOVE the cockpit touch line injected by the call above. Order is
+    # irrelevant here; both are independent one-shot writes.
+    if ($HostsEntries.Count -gt 0) {
+        Write-Log "Adding $($HostsEntries.Count) custom /etc/hosts entr$(if ($HostsEntries.Count -eq 1) {'y'} else {'ies'})..." 'Info'
+        Add-ContentAfterLine -FilePath "$CFGname" -TargetLine "mkdir -p /var/log/veeam/" -NewLines (Get-HostsFileBlock)
+    }
 
     Add-ContentAfterLine -FilePath "$CFGname" -TargetLine 'find /etc/yum.repos.d/ -type f -not -name "*veeam*" -delete' -NewLines (Get-VeeamHostConfigBlock)
     #####
@@ -1926,6 +2049,18 @@ function Invoke-VIAHR {
 
     Add-ContentAfterLine -FilePath "$CFGname" -TargetLine "mkdir -p /var/log/veeam/" -NewLines @("touch /etc/veeam/cockpit_auto_test_disable_init")
 
+    # Custom /etc/hosts entries (all appliance types). Anchored on the same early line
+    # as the cockpit touch above: this lands inside the chroot %post right after log()
+    # is defined, so /etc/hosts is in place before Veeam Host Manager configuration
+    # runs further down -- anything in that later block that resolves a name benefits.
+    # Note Add-ContentAfterLine inserts immediately after the anchor, so this block ends
+    # up just ABOVE the cockpit touch line injected by the call above. Order is
+    # irrelevant here; both are independent one-shot writes.
+    if ($HostsEntries.Count -gt 0) {
+        Write-Log "Adding $($HostsEntries.Count) custom /etc/hosts entr$(if ($HostsEntries.Count -eq 1) {'y'} else {'ies'})..." 'Info'
+        Add-ContentAfterLine -FilePath "$CFGname" -TargetLine "mkdir -p /var/log/veeam/" -NewLines (Get-HostsFileBlock)
+    }
+
     Add-ContentAfterLine -FilePath "$CFGname" -TargetLine 'find /etc/yum.repos.d/ -type f -not -name "*veeam*" -delete' -NewLines (Get-VeeamHostConfigBlock)
     ### 2.6.1 fix - hardened repo secret token not pairing automaticly
     Add-ContentAfterLine -FilePath "$CFGname" -TargetLine '/opt/veeam/hostmanager/veeamhostmanager --apply_init_config /etc/veeam/vbr_init.cfg' -NewLines ('export VEEAM_SECRETTOKEN="000000" && /opt/veeam/deployment/veeamdeploymentsvc --start-pairing --timeout -1')
@@ -1958,7 +2093,7 @@ try {
     Start-Transcript -Path $logFile -Append
 
     Write-Log "=================================================================================================="
-    Write-Log "Veeam ISO Customization Script - Version 2.8"
+    Write-Log "Veeam ISO Customization Script - Version 2.9"
     Write-Log "=================================================================================================="
 
     # JSON-ONLY MODE: defaults first, JSON wins for any key it defines.
@@ -1966,6 +2101,7 @@ try {
     $jsonConfig = Import-JSONConfig -ConfigFilePath $ConfigFile
     Update-ParametersFromJSON -Config $jsonConfig
     Test-ParameterSafety
+    Test-HostsEntryShape
     Write-Log "Configuration loaded from JSON file: $ConfigFile" 'Info'
 
     # Post-load validation (ValidateSet was on the param block, now gone).
