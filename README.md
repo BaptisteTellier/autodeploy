@@ -232,6 +232,7 @@ the script calls it directly.
 | Subnet      | String   | Subnet mask                     | 255.255.255.0   |
 | Gateway     | String   | Gateway IP                      | 192.168.1.1     |
 | DNSServers  | Array    | DNS servers (comma-separated)   | ["192.168.1.64", "8.8.4.4"] |
+| HostsEntries | Array&lt;String&gt; | Extra lines appended to `/etc/hosts` (all appliance types). See [Optional Features](#optional-features). | `[]` |
 
 ### Veeam Security Appliance Parameters
 
