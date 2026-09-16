@@ -110,9 +110,13 @@ Array of DNS server IP addresses for static network configuration.
 Default: @("192.168.1.64", "8.8.4.4")
 
 .PARAMETER EnableIPv6
-Enable IPv6 on the deployed appliance's network interface.
-When set to $false, the kickstart `network` line gets `--noipv6` appended,
-disabling IPv6 at install time on the appliance.
+CURRENTLY INERT -- setting this to $false does NOT disable IPv6.
+The implementation is commented out in Set-NetworkConfiguration: the generated
+kickstart looked correct (`--noipv6` plus `ipv6.disable=1` on the kernel command
+line) but the booted appliance still came up with IPv6 active, so the option only
+claimed to work. The key is still accepted so existing JSON configs do not raise an
+unknown-key warning, and a warning is logged when it is set to $false.
+Re-enabling is a matter of uncommenting the two blocks. Not a priority.
 JSON note: must be a real boolean (`true` / `false`), not a string.
 Default: $true
 
@@ -802,7 +806,7 @@ function Get-ModificationSummary {
         $summary += "  DNS: $($DNSServers -join ', ')"
     }
     if (-not $EnableIPv6) {
-        $summary += "  IPv6: Disabled (--noipv6)"
+        $summary += "  IPv6: NOT disabled -- EnableIPv6 is inert (see Set-NetworkConfiguration)"
     }
     $summary += "  NTP: $($NtpServer -join ', ')"
     if ($HostsEntries.Count -gt 0) {
@@ -1042,9 +1046,19 @@ function Set-NetworkConfiguration {
         Write-Log "Using static IP configuration: $StaticIP" 'Info'
     }
 
+    # DISABLED -- does not have the intended effect on the appliance.
+    # `--noipv6` is accepted by Anaconda and the generated kickstart looks right, but the
+    # booted appliance still comes up with IPv6 active, so the option only produced a log
+    # line claiming something that never happened. Parked rather than removed: the code is
+    # correct as written, what is missing is understanding why Veeam's own configuration
+    # brings IPv6 back. Not a priority.
+    #
+    # if (-not $EnableIPv6) {
+    #     $networkLine += " --noipv6"
+    #     Write-Log "IPv6 disabled (--noipv6 appended to network line)" 'Info'
+    # }
     if (-not $EnableIPv6) {
-        $networkLine += " --noipv6"
-        Write-Log "IPv6 disabled (--noipv6 appended to network line)" 'Info'
+        Write-Log "EnableIPv6=false is currently INERT: the appliance still boots with IPv6 enabled. The option is parked, not applied." 'Warn'
     }
     
     $content = Get-Content $FilePath
@@ -1078,16 +1092,20 @@ function Set-NetworkConfiguration {
     #   2. sed into /etc/default/grub during %post (survives grub2-mkconfig regeneration
     #      that the Veeam kickstart does later in the same %post block -- this is the
     #      one that actually sticks, since Veeam's grub2-mkconfig wipes #1)
-    if (-not $EnableIPv6) {
-        Add-KernelBootloaderParam -FilePath $FilePath -Token 'ipv6.disable=1'
-
-        $ksContent = Get-Content $FilePath -Raw
-        if ($ksContent -match 'log "Regenerate grub\.cfg"') {
-            Add-ContentAfterLine -FilePath $FilePath -TargetLine 'log "Regenerate grub.cfg"' -NewLines (Get-DisableIPv6PostBlock)
-        } else {
-            Write-Log "Target 'log Regenerate grub.cfg' not found in kickstart; /etc/default/grub IPv6 injection skipped. The bootloader --append directive may not persist if the kickstart regenerates grub.cfg later." 'Warn'
-        }
-    }
+    # DISABLED together with the --noipv6 block above -- same reason: the appliance still
+    # boots with IPv6 enabled. Add-KernelBootloaderParam and Get-DisableIPv6PostBlock are
+    # deliberately left defined below so re-enabling is just uncommenting this block.
+    #
+    # if (-not $EnableIPv6) {
+    #     Add-KernelBootloaderParam -FilePath $FilePath -Token 'ipv6.disable=1'
+    #
+    #     $ksContent = Get-Content $FilePath -Raw
+    #     if ($ksContent -match 'log "Regenerate grub\.cfg"') {
+    #         Add-ContentAfterLine -FilePath $FilePath -TargetLine 'log "Regenerate grub.cfg"' -NewLines (Get-DisableIPv6PostBlock)
+    #     } else {
+    #         Write-Log "Target 'log Regenerate grub.cfg' not found in kickstart; /etc/default/grub IPv6 injection skipped." 'Warn'
+    #     }
+    # }
 }
 
 function Add-KernelBootloaderParam {
